@@ -4,17 +4,27 @@ import jwt from 'jsonwebtoken';
 import { getSurrealDB, type User } from './surrealdb';
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Only used when JWT_SECRET is unset (local dev). Randomly generated per process start,
 // so tokens are unpredictable but also invalidated on every restart — never rely on this in a
 // deployed environment. JWT_SECRET must be set in staging/production.
-const EPHEMERAL_DEV_SECRET = crypto.randomBytes(32).toString('hex');
+let EPHEMERAL_DEV_SECRET: string | null = null;
 
 if (!JWT_SECRET) {
+  if (NODE_ENV === 'production') {
+    throw new Error('[Auth] FATAL: JWT_SECRET must be set in production');
+  }
   console.warn('[Auth] WARNING: JWT_SECRET not set. Using a random per-process secret for development only.');
+  EPHEMERAL_DEV_SECRET = crypto.randomBytes(32).toString('hex');
 }
 
-const getJwtSecret = () => JWT_SECRET || EPHEMERAL_DEV_SECRET;
+const getJwtSecret = () => {
+  if (JWT_SECRET) return JWT_SECRET;
+  if (EPHEMERAL_DEV_SECRET) return EPHEMERAL_DEV_SECRET;
+  throw new Error('[Auth] JWT secret not available');
+};
+
 const JWT_EXPIRES_IN = '30d';
 
 export interface AuthTokenPayload {

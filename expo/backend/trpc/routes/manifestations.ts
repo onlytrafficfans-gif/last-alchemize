@@ -83,38 +83,37 @@ export const manifestationsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getSurrealDB();
-      
-      await db.query(
-        `UPDATE ${input.id} SET 
-          title = $title,
-          description = $description,
-          category = $category,
-          intention = $intention,
-          images = $images,
-          isFavorite = $isFavorite,
-          order = $order,
-          updatedAt = $updatedAt
-        WHERE userId = $userId`,
-        {
-          ...input,
-          updatedAt: Date.now(),
-          userId: ctx.user.id,
-        }
-      );
 
-      return { success: true };
+      const existing = await db.select(input.id) as any;
+      if (!existing || existing.userId !== ctx.user.id) {
+        throw new Error('Unauthorized');
+      }
+
+      const updated = await db.update(input.id, {
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        intention: input.intention,
+        images: input.images,
+        isFavorite: input.isFavorite,
+        order: input.order,
+        updatedAt: Date.now(),
+      });
+
+      return updated;
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getSurrealDB();
-      
-      await db.query(
-        `DELETE ${input.id} WHERE userId = $userId`,
-        { userId: ctx.user.id }
-      );
 
+      const existing = await db.select(input.id) as any;
+      if (!existing || existing.userId !== ctx.user.id) {
+        throw new Error('Unauthorized');
+      }
+
+      await db.delete(input.id);
       return { success: true };
     }),
 });

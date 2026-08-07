@@ -5,11 +5,25 @@ import { getUserFromToken } from "../lib/auth";
 
 export async function createContext(opts: FetchCreateContextFnOptions) {
   const authHeader = opts.req.headers.get('authorization');
-  const token = authHeader?.replace('Bearer ', '');
-
   let user = null;
-  if (token) {
-    user = await getUserFromToken(token);
+
+  if (authHeader) {
+    if (!authHeader.startsWith('Bearer ')) {
+      console.warn('[Auth] Invalid authorization header format');
+    } else {
+      const token = authHeader.substring(7);
+
+      if (!token || token.length === 0) {
+        console.warn('[Auth] Empty bearer token');
+      } else if (token.split('.').length !== 3) {
+        console.warn('[Auth] Invalid JWT format');
+      } else {
+        user = await getUserFromToken(token);
+        if (!user) {
+          console.warn('[Auth] Failed to verify token');
+        }
+      }
+    }
   }
 
   return {
