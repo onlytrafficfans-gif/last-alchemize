@@ -21,7 +21,7 @@
     "ci:audit": "bun audit",
     "backend:dev": "NODE_ENV=development tsx backend/server.ts",
     "backend:start": "NODE_ENV=production tsx backend/server.ts",
-    "backend:typecheck": "tsc --noEmit backend/**/*.ts",
+    "backend:typecheck": "tsc --noEmit --skipLibCheck",
     "prebuild:config": "bunx expo config --type public",
     "prebuild:check": "bunx expo config --type prebuild"
   },
