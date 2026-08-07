@@ -17,11 +17,13 @@
     "validate:health": "node scripts/repo-health-check.js",
     "validate:production": "node scripts/production-preflight.js",
     "validate:final": "node scripts/final-validation.js",
-    "ci:local": "npm run typecheck && npm run lint && npm run validate:final && npm run doctor",
-    "ci:audit": "npm audit --audit-level=moderate",
+    "ci:local": "bun run typecheck && bun run backend:typecheck && bun run lint && bun run validate:final && bun run doctor && bun run export:web && bun run export:android",
+    "ci:audit": "bun audit",
     "backend:dev": "NODE_ENV=development tsx backend/server.ts",
     "backend:start": "NODE_ENV=production tsx backend/server.ts",
-    "backend:typecheck": "tsc --noEmit backend/**/*.ts"
+    "backend:typecheck": "tsc --noEmit backend/**/*.ts",
+    "prebuild:config": "bunx expo config --type public",
+    "prebuild:check": "bunx expo config --type prebuild"
   },
   "dependencies": {
     "@expo-google-fonts/akronim": "^0.4.0",
