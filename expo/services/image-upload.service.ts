@@ -44,7 +44,7 @@ export interface UploadResult {
  * (e.g. photo.png) would mismatch the actual uploaded bytes/content-type
  * (image/jpeg).
  */
-function safeFilename(originalName: string): string {
+export function safeFilename(originalName: string): string {
   const base = originalName
     .replace(/\.[^.]+$/, '')
     .replace(/[^a-zA-Z0-9_-]/g, '_')

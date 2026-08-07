@@ -26,7 +26,7 @@ app.use(
 );
 
 // Readiness middleware: block all data-access routes until DB is ready
-app.use("/api/trpc/*", (c, next) => {
+app.use("/api/trpc/*", async (c, next) => {
   if (!isReady()) {
     return c.json(
       {
@@ -36,7 +36,7 @@ app.use("/api/trpc/*", (c, next) => {
       503,
     );
   }
-  return next();
+  await next();
 });
 
 app.use(

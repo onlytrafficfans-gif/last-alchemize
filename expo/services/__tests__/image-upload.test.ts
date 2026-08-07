@@ -146,7 +146,7 @@ describe('Image Upload Safety', () => {
         },
       };
 
-      expect(result.signedUrl).toBeUndefined();
+      expect('signedUrl' in result).toBe(false);
       expect(result.path).toBeDefined();
     });
 
