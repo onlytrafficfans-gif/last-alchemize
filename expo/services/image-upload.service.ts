@@ -33,8 +33,6 @@ const SIGNED_URL_EXPIRY_SECONDS = 60 * 60; // 1 hour
 export interface UploadResult {
   success: boolean;
   error?: string;
-  signedUrl?: string;
-  signedUrlExpiresInSeconds?: number;
   path?: string;
   metadata?: CompressedImage;
 }
@@ -46,7 +44,7 @@ export interface UploadResult {
  * (e.g. photo.png) would mismatch the actual uploaded bytes/content-type
  * (image/jpeg).
  */
-function safeFilename(originalName: string): string {
+export function safeFilename(originalName: string): string {
   const base = originalName
     .replace(/\.[^.]+$/, '')
     .replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -135,12 +133,14 @@ export async function compressImageBeforeUpload(
  *
  * @param compressedImage - Result from compressImageBeforeUpload()
  * @param fileName - Original filename for path construction
- * @returns UploadResult with public URL on success
+ * @returns UploadResult with storage path on success (not the signed URL)
  */
 export async function uploadImageToSupabase(
   compressedImage: CompressedImage,
   fileName: string = 'image.jpg'
 ): Promise<UploadResult> {
+  let tempFileUri: string | null = null;
+
   try {
     const userId = getSupabaseUserId();
     const supabase = getSupabase();
@@ -149,6 +149,13 @@ export async function uploadImageToSupabase(
     const storagePath = `users/${userId}/uploads/${timestamp}-${safeName}`;
 
     console.log('[ImageUpload] Uploading to:', storagePath);
+
+    // Validate MIME type strictly
+    if (compressedImage.mimeType !== 'image/jpeg') {
+      throw new Error(`Invalid MIME type. Expected image/jpeg, got ${compressedImage.mimeType}`);
+    }
+
+    tempFileUri = compressedImage.uri;
 
     // Read the compressed file as base64 and decode to ArrayBuffer
     const base64 = await FileSystem.readAsStringAsync(compressedImage.uri, {
@@ -160,7 +167,7 @@ export async function uploadImageToSupabase(
     const { data, error } = await supabase.storage
       .from(BUCKET)
       .upload(storagePath, arrayBuffer, {
-        contentType: compressedImage.mimeType,
+        contentType: 'image/jpeg',
         upsert: false,
       });
 
@@ -168,22 +175,10 @@ export async function uploadImageToSupabase(
 
     if (error) throw error;
 
-    // Short-lived signed URL rather than a permanent public one — the
-    // 'user-uploads' bucket must be configured as private in the Supabase
-    // dashboard for this to actually restrict access (bucket privacy is a
-    // dashboard setting, not something this code can enforce).
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from(BUCKET)
-      .createSignedUrl(storagePath, SIGNED_URL_EXPIRY_SECONDS);
-
-    logSupabaseOp('STORAGE_UPLOAD', BUCKET, { error: signedUrlError }, `signed url for path=${storagePath}`);
-
-    if (signedUrlError) throw signedUrlError;
-
+    // Return only the path. The signed URL should be generated on-demand by the client
+    // when the image needs to be displayed, not stored or cached in the app.
     return {
       success: true,
-      signedUrl: signedUrlData.signedUrl,
-      signedUrlExpiresInSeconds: SIGNED_URL_EXPIRY_SECONDS,
       path: storagePath,
       metadata: compressedImage,
     };
@@ -193,6 +188,16 @@ export async function uploadImageToSupabase(
       success: false,
       error: error?.message || 'Failed to upload image',
     };
+  } finally {
+    // Clean up temporary compressed file
+    if (tempFileUri) {
+      try {
+        await FileSystem.deleteAsync(tempFileUri, { idempotent: true });
+        console.log('[ImageUpload] Cleaned up temporary file');
+      } catch (cleanupError) {
+        console.warn('[ImageUpload] Failed to clean up temporary file:', cleanupError);
+      }
+    }
   }
 }
 
@@ -213,5 +218,54 @@ export async function compressAndUpload(
       success: false,
       error: error?.message || 'Image upload failed',
     };
+  }
+}
+
+/**
+ * Generate a short-lived signed URL for displaying an image.
+ * Call this when you need to display an image, not when storing it.
+ *
+ * @param storagePath - The path returned from uploadImageToSupabase()
+ * @returns Signed URL for display, or error
+ */
+export async function getImageSignedUrl(storagePath: string): Promise<string> {
+  try {
+    const supabase = getSupabase();
+
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(storagePath, SIGNED_URL_EXPIRY_SECONDS);
+
+    if (error) throw error;
+
+    return data.signedUrl;
+  } catch (error: any) {
+    console.error('[ImageUpload] Failed to generate signed URL:', error?.message || error);
+    throw new Error('Failed to generate image URL');
+  }
+}
+
+/**
+ * Delete an image from storage.
+ * Used during account deletion or when user removes an image.
+ *
+ * @param storagePath - The path of the image to delete
+ * @returns true on success, throws on error
+ */
+export async function deleteImage(storagePath: string): Promise<boolean> {
+  try {
+    const supabase = getSupabase();
+
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .remove([storagePath]);
+
+    if (error) throw error;
+
+    console.log('[ImageUpload] Deleted image:', storagePath);
+    return true;
+  } catch (error: any) {
+    console.error('[ImageUpload] Failed to delete image:', error?.message || error);
+    throw new Error('Failed to delete image');
   }
 }

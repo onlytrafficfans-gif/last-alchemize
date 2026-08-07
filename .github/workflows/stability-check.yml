@@ -6,47 +6,107 @@ on:
     branches:
       - main
       - master
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
 
     defaults:
       run:
         working-directory: expo
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: Setup Bun
+      - name: Setup Bun runtime (v1.3.14)
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.14
 
-      - name: Install dependencies
+      - name: Install dependencies (frozen-lockfile)
         run: bun install --frozen-lockfile
+        timeout-minutes: 10
 
-      - name: TypeScript check
-        run: npx tsc --noEmit
+      - name: TypeScript type checking (app)
+        run: bun run typecheck
+        timeout-minutes: 5
 
-      - name: Lint
-        run: npx expo lint
+      - name: TypeScript type checking (backend)
+        run: bun run backend:typecheck
+        timeout-minutes: 5
 
-      - name: Run handoff validation
-        run: node scripts/validate-handoff.js
+      - name: ESLint check
+        run: bun run lint
+        timeout-minutes: 5
 
-      - name: Run repository health check
-        run: node scripts/repo-health-check.js
+      - name: Expo Doctor (configuration verification)
+        run: bunx expo-doctor
+        timeout-minutes: 5
 
-      - name: Run production preflight
-        run: node scripts/production-preflight.js
+      - name: Handoff validation
+        run: bun run validate:handoff
+        timeout-minutes: 3
 
-      - name: Run final validation
-        run: node scripts/final-validation.js
+      - name: Repository health check
+        run: bun run validate:health
+        timeout-minutes: 3
+
+      - name: Production preflight checks
+        run: bun run validate:production
+        timeout-minutes: 3
+
+      - name: Final validation
+        run: bun run validate:final
+        timeout-minutes: 3
+
+      - name: Expo config type check
+        run: bun run prebuild:config
+        timeout-minutes: 3
 
       - name: Export web bundle
-        run: npx expo export --platform web
+        run: bun run export:web
+        timeout-minutes: 10
 
       - name: Export Android bundle
-        run: npx expo export --platform android
+        run: bun run export:android
+        timeout-minutes: 10
+
+      - name: Upload web bundle artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-export
+          path: expo/dist
+          retention-days: 3
+          if-no-files-found: ignore
+
+      - name: Build reproducibility check
+        run: |
+          echo "✓ Bun version: $(bun --version)"
+          echo "✓ Node version: $(node --version)"
+          echo "✓ TypeScript version: $(bunx tsc --version)"
+          echo "✓ Lockfile integrity: bun.lock ($(wc -l < bun.lock) lines)"
+        timeout-minutes: 2
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "## Build Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Dependencies: Reproducible install (frozen-lockfile)" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Type Checking: App and backend clean" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Linting: No errors" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Configuration: Valid Expo setup" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Exports: Web and Android bundles generated" >> $GITHUB_STEP_SUMMARY
+          echo "✓ All validation checks passed" >> $GITHUB_STEP_SUMMARY

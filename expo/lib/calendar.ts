@@ -4,12 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const CALENDAR_ID_KEY = '@alchemize_calendar_id';
 const CALENDAR_ENABLED_KEY = '@alchemize_calendar_enabled';
 
+// @ts-expect-error expo-calendar is optional
 let Calendar: typeof import('expo-calendar') | null = null;
 
 async function getCalendarModule() {
   if (Platform.OS === 'web') return null;
   if (!Calendar) {
     try {
+      // @ts-expect-error expo-calendar is optional
       Calendar = await import('expo-calendar');
     } catch (error) {
       console.error('[Calendar] Failed to import expo-calendar:', error);

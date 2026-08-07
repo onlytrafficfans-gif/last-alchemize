@@ -61,32 +61,33 @@ export const gratitudeRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getSurrealDB();
-      
-      await db.query(
-        `UPDATE ${input.id} SET 
-          gratitude1 = $gratitude1,
-          gratitude2 = $gratitude2,
-          gratitude3 = $gratitude3
-        WHERE userId = $userId`,
-        {
-          ...input,
-          userId: ctx.user.id,
-        }
-      );
 
-      return { success: true };
+      const existing = await db.select(input.id) as any;
+      if (!existing || existing.userId !== ctx.user.id) {
+        throw new Error('Unauthorized');
+      }
+
+      const updated = await db.update(input.id, {
+        gratitude1: input.gratitude1,
+        gratitude2: input.gratitude2,
+        gratitude3: input.gratitude3,
+        updatedAt: Date.now(),
+      });
+
+      return updated;
     }),
 
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getSurrealDB();
-      
-      await db.query(
-        `DELETE ${input.id} WHERE userId = $userId`,
-        { userId: ctx.user.id }
-      );
 
+      const existing = await db.select(input.id) as any;
+      if (!existing || existing.userId !== ctx.user.id) {
+        throw new Error('Unauthorized');
+      }
+
+      await db.delete(input.id);
       return { success: true };
     }),
 });
