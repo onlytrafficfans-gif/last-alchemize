@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { generateObject } from '@rork-ai/toolkit-sdk';
 import { z } from 'zod';
 import { workoutTemplatesDb, workoutSessionsDb, normalizedMetricsDb } from '@/lib/db/fitness';
+import { getLocalDateKey } from '@/lib/healthkit';
 import { estimateCalories } from '@/lib/fitness';
 import type { WorkoutSession, WorkoutTemplate } from '@/types';
 
@@ -87,10 +88,10 @@ export default function AddWorkoutScreen() {
 
       await workoutSessionsDb.create(session);
 
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = getLocalDateKey();
       const existingMetric = await normalizedMetricsDb.getByDate(dateStr);
       if (existingMetric) {
-        await normalizedMetricsDb.upsert({
+        await normalizedMetricsDb.update({
           id: existingMetric.id,
           date: dateStr,
           activeMinutes: (existingMetric.activeMinutes || 0) + durationNum,

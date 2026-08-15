@@ -85,7 +85,7 @@ export default function FitnessHubScreen() {
   const { steps: pedometerSteps } = usePedometer();
 
   const todayProgress = useMemo(() => getTodayProgress(sessions, todayMetric || null), [sessions, todayMetric]);
-  const displaySteps = todayProgress.steps > 0 ? todayProgress.steps : pedometerSteps;
+  const displaySteps = Math.max(todayProgress.steps, pedometerSteps);
   const weekSummary = useMemo(() => getWeekSummary(sessions), [sessions]);
   const recommended = useMemo(() => recommendWorkouts(templates, sessions, activePlan || null), [templates, sessions, activePlan]);
   const weekDays = useMemo(() => markActiveDay(getWeekDays(), sessions), [sessions]);

@@ -7,6 +7,7 @@ import { Play, Pause, Square, ChevronLeft, Flame, Clock, RotateCcw } from 'lucid
 import * as Haptics from 'expo-haptics';
 import { workoutTemplatesDb, workoutSessionsDb, normalizedMetricsDb } from '@/lib/db/fitness';
 import { estimateCalories } from '@/lib/fitness';
+import { getLocalDateKey } from '@/lib/healthkit';
 import { playCompletionChime } from '@/lib/sound';
 import type { WorkoutSession } from '@/types';
 
@@ -87,10 +88,10 @@ export default function WorkoutScreen() {
 
       await workoutSessionsDb.create(session);
 
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = getLocalDateKey();
       const existingMetric = await normalizedMetricsDb.getByDate(dateStr);
       if (existingMetric) {
-        await normalizedMetricsDb.upsert({
+        await normalizedMetricsDb.update({
           id: existingMetric.id,
           date: dateStr,
           activeMinutes: (existingMetric.activeMinutes || 0) + durationMinutes,
