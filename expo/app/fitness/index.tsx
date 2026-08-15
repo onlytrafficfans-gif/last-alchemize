@@ -16,6 +16,7 @@ import {
   markActiveDay,
 } from '@/lib/fitness';
 import { usePedometer } from '@/hooks/use-pedometer';
+import { getLocalDateKey } from '@/lib/healthkit';
 
 function WorkoutCard({ workout, onPress }: { workout: WorkoutTemplate; onPress: () => void }) {
   return (
@@ -54,7 +55,7 @@ export default function FitnessHubScreen() {
     queryKey: ['todayMetric'],
     queryFn: async () => {
       const today = new Date();
-      const dateStr = today.toISOString().split('T')[0];
+      const dateStr = getLocalDateKey(today);
       return await normalizedMetricsDb.getByDate(dateStr);
     },
   });

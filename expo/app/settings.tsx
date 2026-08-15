@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import PressableScale from '@/components/PressableScale';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useTheme } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -61,10 +62,11 @@ import {
   revokeHealthKitPermissions,
   syncHealthKitData,
   getLastSyncTime,
+  needsHealthKitPermissionUpdate,
   type HealthKitPermissions,
 } from '@/lib/healthkit';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
 
 interface UserProfileData {
   displayName: string;
@@ -117,6 +119,7 @@ export default function SettingsScreen() {
   const [healthKitPermissions, setHealthKitPermissions] = useState<HealthKitPermissions | null>(null);
   const [healthKitLastSync, setHealthKitLastSync] = useState<string | null>(null);
   const [isSyncingHealthKit, setIsSyncingHealthKit] = useState(false);
+  const healthKitPermissionUpdateNeeded = needsHealthKitPermissionUpdate(healthKitPermissions);
   const { theme, setTheme } = useTheme();
   const [pwaInstallPrompt, setPwaInstallPrompt] = useState<any>(null);
   const [isPwaInstalled, setIsPwaInstalled] = useState(false);
@@ -1161,7 +1164,7 @@ export default function SettingsScreen() {
 
               <Text style={styles.legalSectionTitle}>5. Apple Health (HealthKit)</Text>
               <Text style={styles.legalText}>
-                If you connect Apple Health, we access workout, active energy, and exercise-minute data solely to power in-app fitness features. This data is never sold and is never used for advertising, marketing, or any purpose outside the features you enabled it for. You can disconnect Apple Health at any time in Settings.
+                If you connect Apple Health, we access workout, active energy, exercise-minute, and step-count data solely to power in-app fitness features. This data is never sold and is never used for advertising, marketing, or any purpose outside the features you enabled it for. You can disconnect Apple Health at any time in Settings.
               </Text>
 
               <Text style={styles.legalSectionTitle}>6. Your Account & Security</Text>
@@ -1361,7 +1364,7 @@ export default function SettingsScreen() {
               <Text style={styles.legalBullet}>• Profile info: profile photo (if you choose to upload), display name</Text>
               <Text style={styles.legalBullet}>• App content you create: affirmations, goals, habits, journal entries, logs (fitness, diet, finance), and similar entries</Text>
               <Text style={styles.legalBullet}>• Photos and text you submit to AI-powered features (e.g. food/meal photo scanning, workout suggestions)</Text>
-              <Text style={styles.legalBullet}>• Apple Health (HealthKit) data, only if you choose to connect it: workouts, active energy, and exercise minutes</Text>
+              <Text style={styles.legalBullet}>• Apple Health (HealthKit) data, only if you choose to connect it: workouts, active energy, exercise minutes, and step count</Text>
               <Text style={styles.legalBullet}>• Device/app data: app version, device type, crash logs, and performance metrics (for reliability and improvement)</Text>
 
               <Text style={styles.legalSectionTitle}>3. How We Use Information</Text>
@@ -1379,7 +1382,7 @@ export default function SettingsScreen() {
 
               <Text style={styles.legalSectionTitle}>5. Apple Health (HealthKit) Data</Text>
               <Text style={styles.legalText}>
-                If you choose to connect Apple Health, we read workout, active energy, and exercise-minute data solely to power in-app features like fitness sync and activity summaries. We do not sell HealthKit data, and we do not use it for advertising, marketing, or any purpose other than the features you enabled it for. HealthKit data stays associated with your account and is never shared with third parties beyond what is needed to operate the app.
+                If you choose to connect Apple Health, we read workout, active energy, exercise-minute, and step-count data solely to power in-app features like fitness sync and activity summaries. We do not sell HealthKit data, and we do not use it for advertising, marketing, or any purpose other than the features you enabled it for. HealthKit data stays associated with your account and is never shared with third parties beyond what is needed to operate the app.
               </Text>
 
               <Text style={styles.legalSectionTitle}>6. Sharing</Text>
@@ -1571,7 +1574,23 @@ export default function SettingsScreen() {
                         <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Enabled</Text>
                       </View>
                     </View>
+                    <View style={styles.healthKitStatusRow}>
+                      <View style={styles.healthKitStatusLeft}>
+                        <Activity color="#22c55e" size={18} />
+                        <Text style={styles.healthKitStatusLabel}>Step Count</Text>
+                      </View>
+                      <View style={[styles.healthKitStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                        <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Enabled</Text>
+                      </View>
+                    </View>
                   </View>
+
+                  {healthKitPermissionUpdateNeeded && (
+                    <PressableScale style={styles.healthKitConnectButton} onPress={handleEnableHealthKit}>
+                      <Heart color="#fff" size={20} />
+                      <Text style={styles.healthKitConnectText}>Update Apple Health Permissions</Text>
+                    </PressableScale>
+                  )}
 
                   <View style={styles.healthKitSyncInfo}>
                     <Text style={styles.healthKitSyncLabel}>Last Synced</Text>
@@ -1626,6 +1645,15 @@ export default function SettingsScreen() {
                         <Text style={styles.healthKitFeatureDesc}>See your daily exercise progress</Text>
                       </View>
                     </View>
+                    <View style={styles.healthKitFeatureItem}>
+                      <View style={[styles.healthKitFeatureIcon, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                        <Activity color="#22c55e" size={20} />
+                      </View>
+                      <View style={styles.healthKitFeatureText}>
+                        <Text style={styles.healthKitFeatureTitle}>Step Count</Text>
+                        <Text style={styles.healthKitFeatureDesc}>Track your daily steps from Apple Health</Text>
+                      </View>
+                    </View>
                   </View>
 
                   {Platform.OS !== 'ios' && (
@@ -1652,7 +1680,7 @@ export default function SettingsScreen() {
                   </PressableScale>
 
                   <Text style={styles.healthKitDisclaimer}>
-                    Your health data stays on your device. We only read workout and activity data to enhance your tracking experience.
+                    Your health data stays on your device. We only read workouts, active energy, exercise minutes, and step count to enhance your tracking experience.
                   </Text>
                 </>
               )}

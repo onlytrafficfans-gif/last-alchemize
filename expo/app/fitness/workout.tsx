@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Play, Pause, Square, ChevronLeft, Flame, Clock, RotateCcw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { workoutTemplatesDb, workoutSessionsDb, normalizedMetricsDb } from '@/lib/db/fitness';
+import { workoutTemplatesDb, workoutSessionsDb } from '@/lib/db/fitness';
 import { estimateCalories } from '@/lib/fitness';
 import { playCompletionChime } from '@/lib/sound';
 import type { WorkoutSession } from '@/types';
@@ -86,30 +86,6 @@ export default function WorkoutScreen() {
       };
 
       await workoutSessionsDb.create(session);
-
-      const dateStr = new Date().toISOString().split('T')[0];
-      const existingMetric = await normalizedMetricsDb.getByDate(dateStr);
-      if (existingMetric) {
-        await normalizedMetricsDb.upsert({
-          id: existingMetric.id,
-          date: dateStr,
-          activeMinutes: (existingMetric.activeMinutes || 0) + durationMinutes,
-          caloriesActive: (existingMetric.caloriesActive || 0) + calories,
-          steps: existingMetric.steps || 0,
-          source: 'workout',
-          deviceType: 'none',
-        });
-      } else {
-        await normalizedMetricsDb.create({
-          id: `metric-${Date.now()}`,
-          date: dateStr,
-          activeMinutes: durationMinutes,
-          caloriesActive: calories,
-          steps: 0,
-          source: 'workout',
-          deviceType: 'none',
-        });
-      }
 
       return session;
     },

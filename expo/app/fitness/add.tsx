@@ -7,7 +7,7 @@ import { Sparkles, Zap, ChevronLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { generateObject } from '@rork-ai/toolkit-sdk';
 import { z } from 'zod';
-import { workoutTemplatesDb, workoutSessionsDb, normalizedMetricsDb } from '@/lib/db/fitness';
+import { workoutTemplatesDb, workoutSessionsDb } from '@/lib/db/fitness';
 import { estimateCalories } from '@/lib/fitness';
 import type { WorkoutSession, WorkoutTemplate } from '@/types';
 
@@ -86,30 +86,6 @@ export default function AddWorkoutScreen() {
       };
 
       await workoutSessionsDb.create(session);
-
-      const dateStr = new Date().toISOString().split('T')[0];
-      const existingMetric = await normalizedMetricsDb.getByDate(dateStr);
-      if (existingMetric) {
-        await normalizedMetricsDb.upsert({
-          id: existingMetric.id,
-          date: dateStr,
-          activeMinutes: (existingMetric.activeMinutes || 0) + durationNum,
-          caloriesActive: (existingMetric.caloriesActive || 0) + calories,
-          steps: existingMetric.steps || 0,
-          source: 'workout',
-          deviceType: 'none',
-        });
-      } else {
-        await normalizedMetricsDb.create({
-          id: `metric-${Date.now()}`,
-          date: dateStr,
-          activeMinutes: durationNum,
-          caloriesActive: calories,
-          steps: 0,
-          source: 'workout',
-          deviceType: 'none',
-        });
-      }
 
       return session;
     },

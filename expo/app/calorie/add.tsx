@@ -48,7 +48,7 @@ const FoodSearchResultSchema = z.object({
   protein: z.number().describe('Estimated protein in grams for that serving'),
   carbs: z.number().describe('Estimated total carbohydrates in grams for that serving'),
   fat: z.number().describe('Estimated total fat in grams for that serving'),
-  fiber: z.number().describe('Estimated dietary fiber in grams for that serving'),
+  fiber: z.number().nullable().describe('Dietary fiber in grams for that serving when available. Return null when reliable fiber data is unavailable; never substitute total carbohydrates.'),
 });
 
 type FoodSearchResult = z.infer<typeof FoodSearchResultSchema>;
@@ -58,7 +58,9 @@ function buildFoodSearchPrompt(query: string): string {
 
 The user wants to log this food: "${query}"
 
-Return your best estimate of nutrition facts for ONE standard serving of this food. If the query names a dish or brand, pick the most common home or restaurant preparation. Use realistic values consistent with USDA reference data (e.g. chicken breast ~165 cal/100g cooked, white rice ~130 cal/100g cooked). If the query is too vague to identify a food at all, still return your best single-item guess rather than refusing.`;
+Return your best estimate of nutrition facts for ONE standard serving of this food. If the query names a dish or brand, pick the most common home or restaurant preparation. Use realistic values consistent with USDA reference data (e.g. chicken breast ~165 cal/100g cooked, white rice ~130 cal/100g cooked). If the query is too vague to identify a food at all, still return your best single-item guess rather than refusing.
+
+For dietary fiber specifically, return the fiber value when it is available. If reliable fiber data is unavailable, return null. Never use total carbohydrates as the fiber value.`;
 }
 
 export default function AddMealScreen() {
@@ -273,7 +275,7 @@ export default function AddMealScreen() {
     setProtein(Math.round(aiResult.protein).toString());
     setCarbs(Math.round(aiResult.carbs).toString());
     setFat(Math.round(aiResult.fat).toString());
-    setFiber(Math.round(aiResult.fiber).toString());
+    setFiber(aiResult.fiber != null && Number.isFinite(aiResult.fiber) ? aiResult.fiber.toString() : '');
     setServingSize(aiResult.servingDescription);
     setAiResult(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -416,6 +418,9 @@ export default function AddMealScreen() {
                 <Text style={styles.aiResultMacro}>P {Math.round(aiResult.protein)}g</Text>
                 <Text style={styles.aiResultMacro}>C {Math.round(aiResult.carbs)}g</Text>
                 <Text style={styles.aiResultMacro}>F {Math.round(aiResult.fat)}g</Text>
+                {aiResult.fiber != null && (
+                  <Text style={styles.aiResultMacro}>Fiber {aiResult.fiber}g</Text>
+                )}
               </View>
               <Text style={styles.aiResultHint}>Tap to fill in the form below</Text>
             </TouchableOpacity>
@@ -507,9 +512,21 @@ export default function AddMealScreen() {
               <Text style={styles.macroUnit}>g</Text>
             </View>
           </View>
+
+          <View style={[styles.inputGroup, { marginTop: 12, marginBottom: 0 }]}>
+            <Text style={styles.inputLabel}>Fiber (g)</Text>
+            <TextInput
+              style={styles.input}
+              value={fiber}
+              onChangeText={setFiber}
+              placeholder="0"
+              placeholderTextColor="#444"
+              keyboardType="decimal-pad"
+            />
+          </View>
         </View>
 
-        {(name || calories || protein || carbs || fat) && (
+        {(name || calories || protein || carbs || fat || fiber) && (
           <View style={styles.previewCard}>
             <View style={styles.previewHeader}>
               <Zap size={18} color="#22c55e" />
@@ -536,6 +553,7 @@ export default function AddMealScreen() {
                 <Text style={styles.previewLabel}>Fat</Text>
               </View>
             </View>
+            <Text style={styles.fiberPreview}>Fiber: {fiber || 0}g</Text>
           </View>
         )}
 
@@ -731,6 +749,7 @@ const styles = StyleSheet.create({
   },
   aiResultMacros: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 14,
     marginBottom: 8,
   },
@@ -845,6 +864,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#666',
     marginTop: 4,
+  },
+  fiberPreview: {
+    marginTop: 12,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#888',
   },
   deleteButton: {
     flexDirection: 'row',

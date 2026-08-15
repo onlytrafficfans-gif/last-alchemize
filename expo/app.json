@@ -20,7 +20,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos",
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone"
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone",
+        "NSCalendarsUsageDescription": "Alchemize uses your calendar to schedule fitness reminders and events."
       }
     },
     "android": {
@@ -59,6 +60,12 @@
       }
     },
     "plugins": [
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendar."
+        }
+      ],
       [
         "expo-router",
         {
@@ -109,7 +116,7 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Alchemize reads your Apple Health data (workouts, active energy, exercise minutes) to keep your fitness stats in sync.",
+          "NSHealthShareUsageDescription": "Alchemize reads your Apple Health data including workouts, active energy, exercise minutes, and step count to keep your fitness stats in sync.",
           "NSHealthUpdateUsageDescription": "Alchemize does not write any data to Apple Health."
         }
       ]

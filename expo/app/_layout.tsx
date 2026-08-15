@@ -15,6 +15,7 @@ import NetworkBanner from "@/components/NetworkBanner";
 import GestureOnboarding from "@/components/GestureOnboarding";
 import { registerForPushNotifications } from "@/lib/notifications";
 import { applyWebPolish } from "@/lib/web-polish";
+import { migrateLegacyNormalizedMetrics } from '@/lib/fitness-migration';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -51,10 +52,16 @@ function GestureOnboardingGate() {
 }
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const navState = useRootNavigationState();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      migrateLegacyNormalizedMetrics(user?.id ?? 'guest').catch((error) => console.error('[App] Legacy fitness metric migration failed:', error));
+    }
+  }, [isAuthenticated, isLoading, user?.id]);
 
   useEffect(() => {
     if (isLoading) return;

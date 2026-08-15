@@ -37,12 +37,8 @@ export const WORKOUT_TEMPLATES: Omit<WorkoutTemplate, 'id'>[] = [
 export async function seedWorkoutTemplates() {
   const existing = await workoutTemplatesDb.getAll();
   if (existing.length > 0) return;
-  
   for (const template of WORKOUT_TEMPLATES) {
-    await workoutTemplatesDb.create({
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
-      ...template,
-    });
+    await workoutTemplatesDb.create({ id: Date.now().toString() + Math.random().toString(36).substring(2, 11), ...template });
   }
 }
 
@@ -55,206 +51,113 @@ export async function seedAwards() {
     { code: 'WORKOUTS_100', title: 'Century Club', description: 'Complete 100 workouts', earnedAt: null },
     { code: 'VARIETY_5', title: 'Variety Seeker', description: 'Try 5 different workout categories', earnedAt: null },
   ];
-  
   for (const award of awards) {
-    await awardsDb.create({
-      id: Date.now().toString() + Math.random().toString(36).substring(2, 11),
-      ...award,
-    });
+    await awardsDb.create({ id: Date.now().toString() + Math.random().toString(36).substring(2, 11), ...award });
   }
 }
 
-export function getTodayProgress(sessions: WorkoutSession[], metrics: NormalizedMetric | null): {
-  activeMinutes: number;
-  calories: number;
-  steps: number;
-} {
+const saneNumber = (value: unknown, max = Number.MAX_SAFE_INTEGER): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 && n <= max ? n : 0;
+};
+
+function isWearableSession(session: WorkoutSession): boolean {
+  return session.source === 'wearable' || session.id.startsWith('healthkit_');
+}
+
+export function getTodayProgress(sessions: WorkoutSession[], metrics: NormalizedMetric | null): { activeMinutes: number; calories: number; steps: number } {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayMs = today.getTime();
-  
   const todaySessions = sessions.filter(s => {
     const sessionDate = new Date(s.startedAt);
     sessionDate.setHours(0, 0, 0, 0);
-    return sessionDate.getTime() === todayMs && s.completed;
+    return sessionDate.getTime() === todayMs && s.completed && !isWearableSession(s);
   });
-  
-  const workoutMinutes = todaySessions.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const workoutCalories = todaySessions.reduce((sum, s) => sum + (s.caloriesEstimate || 0), 0);
-  
+  const workoutMinutes = todaySessions.reduce((sum, s) => sum + saneNumber(s.durationMinutes, 1440), 0);
+  const workoutCalories = todaySessions.reduce((sum, s) => sum + saneNumber(s.caloriesEstimate, 20000), 0);
   return {
-    activeMinutes: workoutMinutes + (metrics?.activeMinutes || 0),
-    calories: workoutCalories + (metrics?.caloriesActive || 0),
-    steps: metrics?.steps || 0,
+    activeMinutes: Math.round(workoutMinutes + saneNumber(metrics?.activeMinutes, 1440)),
+    calories: Math.round(workoutCalories + saneNumber(metrics?.caloriesActive, 20000)),
+    steps: Math.round(saneNumber(metrics?.steps, 200000)),
   };
 }
 
-export function getWeekSummary(sessions: WorkoutSession[]): {
-  workoutsThisWeek: number;
-  totalMinutes: number;
-  consistency: number;
-} {
-  const now = Date.now();
-  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-  
-  const weekSessions = sessions.filter(s => s.startedAt >= weekAgo && s.completed);
-  
-  const totalMinutes = weekSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const activeDays = new Set(
-    weekSessions.map(s => {
-      const date = new Date(s.startedAt);
-      date.setHours(0, 0, 0, 0);
-      return date.getTime();
-    })
-  ).size;
-  
-  return {
-    workoutsThisWeek: weekSessions.length,
-    totalMinutes,
-    consistency: Math.round((activeDays / 7) * 100),
-  };
+function currentWeekBounds(): { start: number; end: number } {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() - now.getDay());
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  return { start: start.getTime(), end: end.getTime() };
+}
+
+export function getWeekSummary(sessions: WorkoutSession[]): { workoutsThisWeek: number; totalMinutes: number; consistency: number } {
+  const { start, end } = currentWeekBounds();
+  const weekSessions = sessions.filter(s => s.completed && s.startedAt >= start && s.startedAt < end);
+  const totalMinutes = weekSessions.reduce((sum, s) => sum + saneNumber(s.durationMinutes, 1440), 0);
+  const activeDays = new Set(weekSessions.map(s => {
+    const date = new Date(s.startedAt);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  })).size;
+  return { workoutsThisWeek: weekSessions.length, totalMinutes: Math.round(totalMinutes), consistency: Math.round((activeDays / 7) * 100) };
 }
 
 export async function checkAndAwardAchievements(sessions: WorkoutSession[]): Promise<string[]> {
   const completedSessions = sessions.filter(s => s.completed);
   const newAwards: string[] = [];
-  
-  if (completedSessions.length >= 1) {
-    await awardsDb.markEarned('FIRST_WORKOUT');
-    newAwards.push('FIRST_WORKOUT');
-  }
-  
-  if (completedSessions.length >= 10) {
-    await awardsDb.markEarned('WORKOUTS_10');
-    newAwards.push('WORKOUTS_10');
-  }
-  
-  if (completedSessions.length >= 25) {
-    await awardsDb.markEarned('WORKOUTS_25');
-    newAwards.push('WORKOUTS_25');
-  }
-  
-  if (completedSessions.length >= 50) {
-    await awardsDb.markEarned('WORKOUTS_50');
-    newAwards.push('WORKOUTS_50');
-  }
-  
-  if (completedSessions.length >= 100) {
-    await awardsDb.markEarned('WORKOUTS_100');
-    newAwards.push('WORKOUTS_100');
-  }
-  
+  const thresholds: Array<[number, string]> = [[1,'FIRST_WORKOUT'],[10,'WORKOUTS_10'],[25,'WORKOUTS_25'],[50,'WORKOUTS_50'],[100,'WORKOUTS_100']];
+  for (const [count, code] of thresholds) if (completedSessions.length >= count) { await awardsDb.markEarned(code); newAwards.push(code); }
   const templates = await workoutTemplatesDb.getAll();
-  const uniqueCategories = new Set(
-    completedSessions.map(s => templates.find(t => t.id === s.templateId)?.category).filter(Boolean)
-  );
-  
-  if (uniqueCategories.size >= 5) {
-    await awardsDb.markEarned('VARIETY_5');
-    newAwards.push('VARIETY_5');
-  }
-  
+  const uniqueCategories = new Set(completedSessions.map(s => templates.find(t => t.id === s.templateId)?.category).filter(Boolean));
+  if (uniqueCategories.size >= 5) { await awardsDb.markEarned('VARIETY_5'); newAwards.push('VARIETY_5'); }
   return newAwards;
 }
 
-export function recommendWorkouts(
-  templates: WorkoutTemplate[],
-  sessions: WorkoutSession[],
-  plan: FitnessPlan | null
-): WorkoutTemplate[] {
+export function recommendWorkouts(templates: WorkoutTemplate[], sessions: WorkoutSession[], plan: FitnessPlan | null): WorkoutTemplate[] {
   const now = Date.now();
   const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
-  
   const recentSessions = sessions.filter(s => s.startedAt >= twoWeeksAgo && s.completed);
-  
   const categoryFrequency: Record<string, number> = {};
-  recentSessions.forEach(s => {
-    const template = templates.find(t => t.id === s.templateId);
-    if (template) {
-      categoryFrequency[template.category] = (categoryFrequency[template.category] || 0) + 1;
-    }
-  });
-  
-  const avgDuration = recentSessions.length > 0
-    ? recentSessions.reduce((sum, s) => sum + s.durationMinutes, 0) / recentSessions.length
-    : 25;
-  
+  recentSessions.forEach(s => { const template = templates.find(t => t.id === s.templateId); if (template) categoryFrequency[template.category] = (categoryFrequency[template.category] || 0) + 1; });
+  const avgDuration = recentSessions.length > 0 ? recentSessions.reduce((sum, s) => sum + saneNumber(s.durationMinutes, 1440), 0) / recentSessions.length : 25;
   const lastSession = recentSessions[0];
   const lastTemplate = lastSession ? templates.find(t => t.id === lastSession.templateId) : null;
-  
   const scored = templates.map(template => {
     let score = 100;
-    
-    if (plan?.preferredCategories.includes(template.category)) {
-      score += 30;
-    }
-    
-    const timesUsed = categoryFrequency[template.category] || 0;
-    score -= timesUsed * 5;
-    
-    const durationDiff = Math.abs(template.durationMinutes - avgDuration);
-    score -= durationDiff * 0.5;
-    
+    if (plan?.preferredCategories.includes(template.category)) score += 30;
+    score -= (categoryFrequency[template.category] || 0) * 5;
+    score -= Math.abs(template.durationMinutes - avgDuration) * 0.5;
     if (plan) {
       if (template.intensity === plan.intensity) score += 20;
       if (template.equipment === plan.equipment || plan.equipment === 'none') score += 10;
-      if (template.durationMinutes >= plan.durationRangeMin && template.durationMinutes <= plan.durationRangeMax) {
-        score += 25;
-      }
+      if (template.durationMinutes >= plan.durationRangeMin && template.durationMinutes <= plan.durationRangeMax) score += 25;
     }
-    
-    if (lastTemplate && lastTemplate.category === template.category && lastTemplate.intensity === 'high' && template.intensity === 'high') {
-      score -= 40;
-    }
-    
+    if (lastTemplate && lastTemplate.category === template.category && lastTemplate.intensity === 'high' && template.intensity === 'high') score -= 40;
     return { template, score };
   });
-  
   scored.sort((a, b) => b.score - a.score);
-  
   return scored.slice(0, 6).map(s => s.template);
 }
 
 export function estimateCalories(durationMinutes: number, intensity: string): number {
-  const baseCaloriesPerMinute: Record<string, number> = {
-    low: 4,
-    medium: 7,
-    high: 10,
-  };
-  
-  return Math.round(durationMinutes * (baseCaloriesPerMinute[intensity] || 7));
+  const baseCaloriesPerMinute: Record<string, number> = { low: 4, medium: 7, high: 10 };
+  return Math.round(saneNumber(durationMinutes, 1440) * (baseCaloriesPerMinute[intensity] || 7));
 }
 
 export function getWeekDays(): { date: Date; isActive: boolean }[] {
   const days: { date: Date; isActive: boolean }[] = [];
   const today = new Date();
-  const dayOfWeek = today.getDay();
   const sunday = new Date(today);
-  sunday.setDate(today.getDate() - dayOfWeek);
+  sunday.setDate(today.getDate() - today.getDay());
   sunday.setHours(0, 0, 0, 0);
-  
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(sunday);
-    date.setDate(sunday.getDate() + i);
-    days.push({ date, isActive: false });
-  }
-  
+  for (let i = 0; i < 7; i++) { const date = new Date(sunday); date.setDate(sunday.getDate() + i); days.push({ date, isActive: false }); }
   return days;
 }
 
 export function markActiveDay(days: { date: Date; isActive: boolean }[], sessions: WorkoutSession[]): { date: Date; isActive: boolean }[] {
-  const activeDates = new Set(
-    sessions
-      .filter(s => s.completed)
-      .map(s => {
-        const date = new Date(s.startedAt);
-        date.setHours(0, 0, 0, 0);
-        return date.getTime();
-      })
-  );
-  
-  return days.map(day => ({
-    ...day,
-    isActive: activeDates.has(day.date.getTime()),
-  }));
+  const activeDates = new Set(sessions.filter(s => s.completed).map(s => { const date = new Date(s.startedAt); date.setHours(0, 0, 0, 0); return date.getTime(); }));
+  return days.map(day => ({ ...day, isActive: activeDates.has(day.date.getTime()) }));
 }
