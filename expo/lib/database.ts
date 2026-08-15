@@ -2018,6 +2018,11 @@ export const normalizedMetricsDb = {
     );
   },
 
+  async deleteByDate(date: string): Promise<void> {
+    const database = await ensureDatabase();
+    const userId = getCurrentUserId() ?? 'guest';
+    await database.runAsync('DELETE FROM normalized_metrics WHERE date = ? AND userId = ?', [date, userId]);
+  },
   async upsert(metric: NormalizedMetric): Promise<void> {
     const database = await ensureDatabase();
     const userId = getCurrentUserId() ?? 'guest';
