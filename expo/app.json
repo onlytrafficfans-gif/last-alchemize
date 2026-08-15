@@ -20,7 +20,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos",
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone"
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone",
+        "NSCalendarsUsageDescription": "Alchemize uses your calendar to schedule fitness reminders and events."
       }
     },
     "android": {
@@ -59,6 +60,12 @@
       }
     },
     "plugins": [
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendar."
+        }
+      ],
       [
         "expo-router",
         {
