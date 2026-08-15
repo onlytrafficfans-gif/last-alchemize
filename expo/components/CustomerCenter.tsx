@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Settings, RefreshCw, MessageCircle, HelpCircle } from 'lucide-react-native';
 import { useSubscription } from '@/contexts/subscription-context';
 import { checkProEntitlement, restorePurchases, syncPurchases } from '@/lib/purchases';
-const SUPPORT_EMAIL = 'support@alchemize.app';
+const SUPPORT_EMAIL = 'admin@crfenterprise.com';
 export default function CustomerCenterScreen(){const router=useRouter();const insets=useSafeAreaInsets();const{isPro,customerInfo,refresh}=useSubscription();const[busy,setBusy]=useState<string|null>(null);
 const handleRestore=async()=>{setBusy('restore');try{const ok=await restorePurchases();if(ok){Alert.alert('Success','Your purchases have been restored.');await refresh();}else Alert.alert('No purchases found','We could not find an active subscription to restore.');}finally{setBusy(null);}};
 const handleSync=async()=>{setBusy('sync');try{await syncPurchases();await refresh();Alert.alert('Success','Purchase data synced successfully.');}catch{Alert.alert('Error','Failed to sync purchases. Please try again.');}finally{setBusy(null);}};

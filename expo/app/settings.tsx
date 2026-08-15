@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import PressableScale from '@/components/PressableScale';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useTheme } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -64,7 +65,7 @@ import {
   type HealthKitPermissions,
 } from '@/lib/healthkit';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
 
 interface UserProfileData {
   displayName: string;
