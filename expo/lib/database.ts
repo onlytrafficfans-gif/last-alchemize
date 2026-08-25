@@ -984,7 +984,17 @@ export async function ensureDatabase(): Promise<DatabaseAdapter> {
   if (!db) {
     console.log('[Database] Auto-initializing database...');
     try {
-      await initDatabase();
+      // initDatabase() depends on native calls (SQLite.openDatabaseAsync,
+      // execAsync) that could in principle hang rather than reject on a given
+      // device. Without a bound, every screen that queries the DB would wait
+      // forever with no error and no way to recover. Time-box it instead.
+      const DB_INIT_TIMEOUT_MS = 10000;
+      await Promise.race([
+        initDatabase(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Database initialization timed out')), DB_INIT_TIMEOUT_MS)
+        ),
+      ]);
     } catch (error) {
       console.error('[Database] Auto-init failed:', error);
       throw new Error('Failed to initialize database. Please restart the app.');

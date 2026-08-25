@@ -49,7 +49,19 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    void loadAuthState().finally(() => setIsLoading(false));
+    // loadAuthState() is internally guarded, but a native call it depends on
+    // (e.g. SecureStore.getItemAsync hanging on certain iOS Keychain states)
+    // could in principle never settle. Without a timeout, that would leave
+    // isLoading stuck true forever and freeze the app on the splash screen
+    // with no way to recover. Race against a bound so boot always proceeds.
+    const BOOT_TIMEOUT_MS = 8000;
+    const timeout = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        console.warn('[Auth] loadAuthState timed out after', BOOT_TIMEOUT_MS, 'ms — proceeding unauthenticated');
+        resolve();
+      }, BOOT_TIMEOUT_MS);
+    });
+    void Promise.race([loadAuthState(), timeout]).finally(() => setIsLoading(false));
   }, []);
 
   const loadAuthState = async () => {
