@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, ScrollView, Alert, ActivityIndicator, Linking }
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Check, Crown } from 'lucide-react-native';
+import { Check, Crown, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { useSubscription } from '@/contexts/subscription-context';
@@ -110,6 +110,13 @@ export default function PaywallScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        <TouchableOpacity
+          style={[styles.closeButton, { top: insets.top + 12 }]}
+          onPress={() => router.replace('/')}
+          accessibilityLabel="Close"
+        >
+          <X color="rgba(255,255,255,0.7)" size={20} />
+        </TouchableOpacity>
         <View style={styles.iconWrap}>
           <Crown color="#a78bfa" size={32} />
         </View>
@@ -175,6 +182,17 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 8,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconWrap: {
     width: 56,

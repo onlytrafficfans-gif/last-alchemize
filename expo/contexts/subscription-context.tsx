@@ -73,14 +73,31 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           if (mounted) setIsPro(true);
           return;
         }
-        const initialized = await initPurchases(currentUserId);
-        if (!initialized) {
-          // Do not grant Pro on a failed init — that would silently bypass the
-          // paywall for anyone who can make RevenueCat init fail (bad network,
-          // misconfigured key, SDK error). Leave isPro at its safe default (false).
-          return;
+        // Now that gated features route through this state (see PaywallGate
+        // in app/_layout.tsx), isLoading actually blocks entry to those
+        // screens — a RevenueCat SDK call that hangs rather than rejects
+        // must not leave a paying-eligible user stuck forever. Same defensive
+        // pattern as the auth/database boot-hang fix.
+        const SUBSCRIPTION_INIT_TIMEOUT_MS = 8000;
+        const timedOut = Symbol('timeout');
+        const result = await Promise.race([
+          (async () => {
+            const initialized = await initPurchases(currentUserId);
+            if (!initialized) return false;
+            await loadSubscriptionData();
+            return true;
+          })(),
+          new Promise<typeof timedOut>((resolve) =>
+            setTimeout(() => resolve(timedOut), SUBSCRIPTION_INIT_TIMEOUT_MS)
+          ),
+        ]);
+        if (result === timedOut) {
+          console.warn('[Subscription] initPurchases timed out after', SUBSCRIPTION_INIT_TIMEOUT_MS, 'ms');
         }
-        await loadSubscriptionData();
+        // Do not grant Pro on a failed or timed-out init — that would silently
+        // bypass the paywall for anyone who can make RevenueCat init fail or
+        // hang (bad network, misconfigured key, SDK error). Leave isPro at
+        // its safe default (false).
       } finally {
         if (mounted) setIsLoading(false);
       }

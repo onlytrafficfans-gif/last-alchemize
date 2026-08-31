@@ -9,13 +9,14 @@ import { ChevronLeft } from "lucide-react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
-import { SubscriptionProvider } from "@/contexts/subscription-context";
+import { SubscriptionProvider, useSubscription } from "@/contexts/subscription-context";
 import { initDatabase } from '@/lib/db/core';
 import NetworkBanner from "@/components/NetworkBanner";
 import GestureOnboarding from "@/components/GestureOnboarding";
 import { registerForPushNotifications } from "@/lib/notifications";
 import { applyWebPolish } from "@/lib/web-polish";
 import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
+import { isGatedFeature } from "@/constants/features";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -90,10 +91,32 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 }
 
 function PaywallGate({ children }: { children: React.ReactNode }) {
-  // Paywall enforcement disabled by request — no redirect to /paywall for
-  // non-Pro users. The /paywall screen, RevenueCat purchase/restore flow,
-  // and useSubscription() still exist and work if re-enabled later; this
-  // just stops gating navigation on isPro.
+  const { isPro, isLoading: subLoading } = useSubscription();
+  const router = useRouter();
+  const segments = useSegments();
+  const navState = useRootNavigationState();
+
+  const topSegment = segments[0] as string | undefined;
+  const isGatedRoute = !!topSegment && isGatedFeature(topSegment);
+
+  useEffect(() => {
+    if (subLoading) return;
+    if (!navState?.key) return;
+    if (isGatedRoute && !isPro) {
+      router.replace('/paywall');
+    }
+  }, [isGatedRoute, isPro, subLoading, navState?.key, router]);
+
+  // Never render a gated screen's real content while entitlement is still
+  // resolving or before the redirect above has taken effect — otherwise a
+  // free user briefly sees the feature before being bounced out of it.
+  // This only blocks the gated screen itself, never the whole app, so a
+  // hung subscription check (or one that never grants Pro) leaves the user
+  // able to back out to the free features rather than stuck entirely.
+  if (isGatedRoute && (subLoading || !isPro)) {
+    return <View style={layoutStyles.splash} />;
+  }
+
   return <>{children}</>;
 }
 
