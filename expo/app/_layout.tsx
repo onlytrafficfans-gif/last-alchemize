@@ -15,6 +15,7 @@ import NetworkBanner from "@/components/NetworkBanner";
 import GestureOnboarding from "@/components/GestureOnboarding";
 import { registerForPushNotifications } from "@/lib/notifications";
 import { applyWebPolish } from "@/lib/web-polish";
+import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -155,6 +156,11 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  // Not gated on — screens referencing 'SpaceMono_400Regular' just fall back
+  // to the system font until this resolves, so it can never block the splash
+  // screen the way an awaited load would.
+  useFonts({ SpaceMono_400Regular });
+
   useEffect(() => {
     applyWebPolish();
     if (Platform.OS !== 'web') {

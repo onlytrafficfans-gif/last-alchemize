@@ -16,6 +16,8 @@ import {
   markActiveDay,
 } from '@/lib/fitness';
 import { usePedometer } from '@/hooks/use-pedometer';
+import SkeletonLoader from '@/components/SkeletonLoader';
+import StaggerIn from '@/components/StaggerIn';
 
 function SessionRow({ session, onPress }: { session: WorkoutSession; onPress: () => void }) {
   const isFromHealthKit = session.id.startsWith('healthkit_');
@@ -56,7 +58,7 @@ function WorkoutCard({ workout, onPress }: { workout: WorkoutTemplate; onPress: 
 export default function FitnessHubScreen() {
   const router = useRouter();
 
-  const { data: templates = [] } = useQuery({
+  const { data: templates = [], isLoading: templatesLoading } = useQuery({
     queryKey: ['workoutTemplates'],
     queryFn: async () => {
       const data = await workoutTemplatesDb.getAll();
@@ -68,7 +70,7 @@ export default function FitnessHubScreen() {
     },
   });
 
-  const { data: sessions = [] } = useQuery({
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
     queryKey: ['workoutSessions'],
     queryFn: () => workoutSessionsDb.getAll(),
   });
@@ -113,6 +115,7 @@ export default function FitnessHubScreen() {
   const weekDays = useMemo(() => markActiveDay(getWeekDays(), sessions), [sessions]);
 
   const topWorkout = recommended[0];
+  const isInitialLoading = templatesLoading || sessionsLoading;
 
   const earnedAwards = awards.filter((a: AwardType) => a.earnedAt !== null);
   const lockedAwards = awards.filter((a: AwardType) => a.earnedAt === null).slice(0, 3);
@@ -168,17 +171,21 @@ export default function FitnessHubScreen() {
 
           </View>
 
-          <View style={styles.section}>
+          <StaggerIn index={0} style={styles.section}>
             <Text style={styles.sectionTitle}>Today&apos;s Progress</Text>
-            <View style={styles.progressContainer}>
-              {renderProgressRing(todayProgress.activeMinutes, activeMinutesGoal, '#10b981', 'Minutes')}
-              {renderProgressRing(todayProgress.calories, caloriesGoal, '#f59e0b', 'Calories')}
-              {renderProgressRing(displaySteps, stepsGoal, '#3b82f6', 'Steps')}
-            </View>
-          </View>
+            {isInitialLoading ? (
+              <SkeletonLoader variant="stats" />
+            ) : (
+              <View style={styles.progressContainer}>
+                {renderProgressRing(todayProgress.activeMinutes, activeMinutesGoal, '#10b981', 'Minutes')}
+                {renderProgressRing(todayProgress.calories, caloriesGoal, '#f59e0b', 'Calories')}
+                {renderProgressRing(displaySteps, stepsGoal, '#3b82f6', 'Steps')}
+              </View>
+            )}
+          </StaggerIn>
 
           {topWorkout && (
-            <View style={styles.section}>
+            <StaggerIn index={1} style={styles.section}>
               <TouchableOpacity style={styles.startButton} onPress={handleStartWorkout}>
                 <View style={styles.startButtonContent}>
                   <View style={styles.startIcon}>
@@ -191,24 +198,28 @@ export default function FitnessHubScreen() {
                   <ChevronRight color="#fff" size={24} />
                 </View>
               </TouchableOpacity>
-            </View>
+            </StaggerIn>
           )}
 
-          <View style={styles.section}>
+          <StaggerIn index={2} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Suggested For You</Text>
               <TouchableOpacity onPress={() => router.push('/fitness/browse' as any)}>
                 <Text style={styles.seeAllText}>See All</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carouselContainer}>
-              {recommended.map((workout) => (
-                <WorkoutCard key={workout.id} workout={workout} onPress={() => router.push(`/fitness/workout?templateId=${workout.id}` as any)} />
-              ))}
-            </ScrollView>
-          </View>
+            {isInitialLoading ? (
+              <SkeletonLoader variant="list" rows={2} />
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carouselContainer}>
+                {recommended.map((workout) => (
+                  <WorkoutCard key={workout.id} workout={workout} onPress={() => router.push(`/fitness/workout?templateId=${workout.id}` as any)} />
+                ))}
+              </ScrollView>
+            )}
+          </StaggerIn>
 
-          <View style={styles.section}>
+          <StaggerIn index={3} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Your Week</Text>
             </View>
@@ -222,9 +233,9 @@ export default function FitnessHubScreen() {
                 </View>
               ))}
             </View>
-          </View>
+          </StaggerIn>
 
-          <View style={styles.section}>
+          <StaggerIn index={4} style={styles.section}>
             <Text style={styles.sectionTitle}>This Week</Text>
             <View style={styles.trendCard}>
               <View style={styles.trendRow}>
@@ -243,10 +254,10 @@ export default function FitnessHubScreen() {
                 <Text style={styles.trendValue}>{weekSummary.consistency}%</Text>
               </View>
             </View>
-          </View>
+          </StaggerIn>
 
           {sessions.length > 0 && (
-            <View style={styles.section}>
+            <StaggerIn index={5} style={styles.section}>
               <Text style={styles.sectionTitle}>Recent Activity</Text>
               <View style={styles.sessionsList}>
                 {sessions.slice(0, 8).map((session) => (
@@ -257,10 +268,10 @@ export default function FitnessHubScreen() {
                   />
                 ))}
               </View>
-            </View>
+            </StaggerIn>
           )}
 
-          <View style={styles.section}>
+          <StaggerIn index={6} style={styles.section}>
             <Text style={styles.sectionTitle}>Awards</Text>
             <View style={styles.awardsGrid}>
               {earnedAwards.slice(0, 3).map((award: AwardType) => (
@@ -276,7 +287,7 @@ export default function FitnessHubScreen() {
                 </View>
               ))}
             </View>
-          </View>
+          </StaggerIn>
 
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -322,7 +333,7 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     fontSize: 14,
-    color: '#6366f1',
+    color: '#10b981',
     fontWeight: '600' as const,
   },
   progressContainer: {
@@ -354,10 +365,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700' as const,
     color: '#fff',
+    fontFamily: 'SpaceMono_400Regular',
   },
   ringGoal: {
     fontSize: 12,
     color: '#666',
+    fontFamily: 'SpaceMono_400Regular',
   },
   ringLabel: {
     fontSize: 12,
@@ -365,10 +378,10 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
   },
   startButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#10b981',
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#6366f1',
+    shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -421,7 +434,7 @@ const styles = StyleSheet.create({
   workoutCategory: {
     fontSize: 11,
     fontWeight: '600' as const,
-    color: '#6366f1',
+    color: '#10b981',
     textTransform: 'uppercase',
   },
   workoutIntensity: {
@@ -500,6 +513,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700' as const,
     color: '#fff',
+    fontFamily: 'SpaceMono_400Regular',
   },
   awardsGrid: {
     flexDirection: 'row',
@@ -612,7 +626,7 @@ const styles = StyleSheet.create({
   },
   wearableNoteText: {
     fontSize: 12,
-    color: '#6366f1',
+    color: '#10b981',
     fontStyle: 'italic',
   },
 });

@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Text, ImageBackground, Alert } from 'reac
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Settings, ChevronDown, ChevronUp, Timer, Hash, CheckSquare, Play, Pause, Square } from 'lucide-react-native';
+import { Plus, Settings, ChevronDown, ChevronUp, Timer, Hash, CheckSquare, Play, Pause, Square, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { habitsDb, habitCompletionsDb } from '@/lib/db';
@@ -11,6 +11,7 @@ import type { Habit } from '@/types';
 import { ASSETS } from '@/constants/assets';
 import LoadingState from '@/components/LoadingState';
 import ErrorState from '@/components/ErrorState';
+import EmptyState from '@/components/EmptyState';
 
 type Section = 'morning' | 'health' | 'evening' | 'custom';
 
@@ -485,11 +486,14 @@ export default function HabitsScreen() {
           ) : isError ? (
             <ErrorState message="Could not load your habits" onRetry={refetch} />
           ) : habits.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>✨</Text>
-              <Text style={styles.emptyText}>No habits yet!</Text>
-              <Text style={styles.emptySubtext}>Tap + to create your first habit</Text>
-            </View>
+            <EmptyState
+              icon={Sparkles}
+              title="No habits yet"
+              subtitle="Build a routine one day at a time"
+              actionLabel="Add Habit"
+              onAction={() => router.push('/habits/add' as any)}
+              accentColor="#a78bfa"
+            />
           ) : (
             SECTIONS.map(renderSection)
           )}

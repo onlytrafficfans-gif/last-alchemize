@@ -9,6 +9,7 @@ import { goalsDb, goalCompletionsDb } from '@/lib/db/goals';
 import type { Goal, GoalCompletion } from '@/types';
 import LoadingState from '@/components/LoadingState';
 import ErrorState from '@/components/ErrorState';
+import EmptyState from '@/components/EmptyState';
 
 export default function GoalsScreen() {
   const router = useRouter();
@@ -172,10 +173,14 @@ export default function GoalsScreen() {
       </View>
 
       {filteredGoals.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No {filter === 'in_progress' ? 'active' : 'completed'} goals</Text>
-          <Text style={styles.emptySubtext}>Tap + to create a goal</Text>
-        </View>
+        <EmptyState
+          icon={Target}
+          title={`No ${filter === 'in_progress' ? 'active' : 'completed'} goals`}
+          subtitle={filter === 'in_progress' ? 'Tap + to create a goal' : 'Completed goals will show up here'}
+          actionLabel={filter === 'in_progress' ? 'Add Goal' : undefined}
+          onAction={filter === 'in_progress' ? () => router.push('/goals/add' as any) : undefined}
+          accentColor="#6366f1"
+        />
       ) : (
         <FlatList
           data={filteredGoals}

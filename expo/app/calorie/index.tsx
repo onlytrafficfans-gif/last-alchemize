@@ -17,6 +17,8 @@ import {
   Calendar,
   Trash2,
   Pencil,
+  Bookmark,
+  ScanBarcode,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
@@ -483,7 +485,12 @@ export default function CalorieTrackerScreen() {
                             onPress={() => router.push(`/calorie/add?id=${log.id}` as any)}
                             activeOpacity={0.7}
                           >
-                            <Text style={styles.foodLogName} numberOfLines={1}>{log.foodName}</Text>
+                            <View style={styles.foodLogNameRow}>
+                              {log.sourceType === 'camera' && <Camera size={12} color="#3b82f6" />}
+                              {log.sourceType === 'saved_food' && <Bookmark size={12} color="#f59e0b" />}
+                              {log.sourceType === 'barcode' && <ScanBarcode size={12} color="#a78bfa" />}
+                              <Text style={styles.foodLogName} numberOfLines={1}>{log.foodName}</Text>
+                            </View>
                             <Text style={styles.foodLogMeta}>
                               {log.servingDescription} · {log.calories} cal
                             </Text>
@@ -923,6 +930,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700' as const,
     color: '#fff',
+    fontFamily: 'SpaceMono_400Regular',
   },
   mealCalsUnit: {
     fontSize: 13,
@@ -961,10 +969,16 @@ const styles = StyleSheet.create({
   foodLogInfo: {
     flex: 1,
   },
+  foodLogNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   foodLogName: {
     fontSize: 14,
     fontWeight: '600' as const,
     color: '#fff',
+    flexShrink: 1,
   },
   foodLogMeta: {
     fontSize: 12,
