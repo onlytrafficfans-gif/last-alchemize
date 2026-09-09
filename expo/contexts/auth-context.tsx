@@ -49,6 +49,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    console.info('[Startup] AUTH_STARTED');
     // loadAuthState() is internally guarded, but a native call it depends on
     // (e.g. SecureStore.getItemAsync hanging on certain iOS Keychain states)
     // could in principle never settle. Without a timeout, that would leave
@@ -61,7 +62,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         resolve();
       }, BOOT_TIMEOUT_MS);
     });
-    void Promise.race([loadAuthState(), timeout]).finally(() => setIsLoading(false));
+    void Promise.race([loadAuthState(), timeout]).finally(() => {
+      setIsLoading(false);
+      console.info('[Startup] AUTH_FINISHED');
+    });
   }, []);
 
   const loadAuthState = async () => {

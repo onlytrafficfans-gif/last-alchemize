@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useRootNavigationState, useSegments } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { StyleSheet, Text, Platform, View, Image } from 'react-native';
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -10,15 +10,13 @@ import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
 import { SubscriptionProvider, useSubscription } from "@/contexts/subscription-context";
-import { initDatabase } from '@/lib/db/core';
 import NetworkBanner from "@/components/NetworkBanner";
 import GestureOnboarding from "@/components/GestureOnboarding";
-import { registerForPushNotifications } from "@/lib/notifications";
 import { applyWebPolish } from "@/lib/web-polish";
 import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
 import { isGatedFeature } from "@/constants/features";
 
-SplashScreen.preventAutoHideAsync().catch(() => {});
+console.info('[Startup] JS_STARTED');
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +55,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
   const navState = useRootNavigationState();
+  const navReadyLogged = useRef(false);
+
+  useEffect(() => {
+    if (navState?.key && !navReadyLogged.current) {
+      navReadyLogged.current = true;
+      console.info('[Startup] NAV_READY');
+    }
+  }, [navState?.key]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -68,12 +74,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       router.replace('/');
     }
   }, [isAuthenticated, isLoading, segments, navState?.key, router]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [isLoading]);
 
   if (isLoading) {
     return (
@@ -185,15 +185,52 @@ export default function RootLayout() {
   useFonts({ SpaceMono_400Regular });
 
   useEffect(() => {
+    console.info('[Startup] ROOT_MOUNTED');
+
+    let splashHidden = false;
+    let fallback: ReturnType<typeof setTimeout> | undefined;
+
+    const hideNativeSplash = async (source: 'root-mount' | 'fallback') => {
+      try {
+        await SplashScreen.hideAsync();
+        if (!splashHidden) {
+          splashHidden = true;
+          console.info('[Startup] NATIVE_SPLASH_HIDDEN', source);
+        }
+        if (fallback) clearTimeout(fallback);
+      } catch (error) {
+        console.error(`[Startup] Native splash hide failed (${source})`, error);
+      }
+    };
+
+    // We intentionally do not call preventAutoHideAsync. Expo may release the
+    // native splash on the first rendered frame, and this explicit call makes
+    // root mount the only other owner. Auth and native services are never part
+    // of the splash lifecycle. The retry protects against a transient failure.
+    fallback = setTimeout(() => {
+      void hideNativeSplash('fallback');
+    }, 3000);
+    void hideNativeSplash('root-mount');
+
+    return () => {
+      if (fallback) clearTimeout(fallback);
+    };
+  }, []);
+
+  useEffect(() => {
     applyWebPolish();
     if (Platform.OS !== 'web') {
       console.log('[App] Initializing database...');
-      initDatabase()
+      // Load optional native startup services only after the first React frame.
+      // Import or initialization failures must never block root mount.
+      import('@/lib/db/core')
+        .then(({ initDatabase }) => initDatabase())
         .then(() => console.log('[App] Database ready'))
         .catch((err) => console.error('[App] Database init failed:', err));
 
       console.log('[App] Registering for push notifications...');
-      registerForPushNotifications()
+      import('@/lib/notifications')
+        .then(({ registerForPushNotifications }) => registerForPushNotifications())
         .then((token) => {
           if (token) console.log('[App] Push token registered:', token);
           else console.log('[App] Push notification registration skipped or failed');
