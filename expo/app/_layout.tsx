@@ -18,6 +18,13 @@ import { isGatedFeature } from "@/constants/features";
 
 console.info('[Startup] JS_STARTED');
 
+// Keep the native splash visible until the root React tree is mounted. Calling
+// this at module load is important: calling it from an effect can lose the
+// race with Expo's automatic first-frame hide on cold native launches.
+void SplashScreen.preventAutoHideAsync().catch((error) => {
+  console.warn('[Startup] Could not prevent native splash auto-hide:', error);
+});
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -107,12 +114,6 @@ function PaywallGate({ children }: { children: React.ReactNode }) {
     }
   }, [isGatedRoute, isPro, subLoading, navState?.key, router]);
 
-  // Never render a gated screen's real content while entitlement is still
-  // resolving or before the redirect above has taken effect — otherwise a
-  // free user briefly sees the feature before being bounced out of it.
-  // This only blocks the gated screen itself, never the whole app, so a
-  // hung subscription check (or one that never grants Pro) leaves the user
-  // able to back out to the free features rather than stuck entirely.
   if (isGatedRoute && (subLoading || !isPro)) {
     return <View style={layoutStyles.splash} />;
   }
@@ -179,41 +180,30 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  // Not gated on — screens referencing 'SpaceMono_400Regular' just fall back
-  // to the system font until this resolves, so it can never block the splash
-  // screen the way an awaited load would.
   useFonts({ SpaceMono_400Regular });
 
   useEffect(() => {
     console.info('[Startup] ROOT_MOUNTED');
 
-    let splashHidden = false;
-    let fallback: ReturnType<typeof setTimeout> | undefined;
-
-    const hideNativeSplash = async (source: 'root-mount' | 'fallback') => {
-      try {
-        await SplashScreen.hideAsync();
-        if (!splashHidden) {
-          splashHidden = true;
-          console.info('[Startup] NATIVE_SPLASH_HIDDEN', source);
-        }
-        if (fallback) clearTimeout(fallback);
-      } catch (error) {
-        console.error(`[Startup] Native splash hide failed (${source})`, error);
-      }
-    };
-
-    // We intentionally do not call preventAutoHideAsync. Expo may release the
-    // native splash on the first rendered frame, and this explicit call makes
-    // root mount the only other owner. Auth and native services are never part
-    // of the splash lifecycle. The retry protects against a transient failure.
-    fallback = setTimeout(() => {
-      void hideNativeSplash('fallback');
+    let cancelled = false;
+    const fallback = setTimeout(() => {
+      if (cancelled) return;
+      console.warn('[Startup] Native splash fallback release');
+      void SplashScreen.hideAsync().catch((error) => {
+        console.error('[Startup] Native splash fallback hide failed:', error);
+      });
     }, 3000);
-    void hideNativeSplash('root-mount');
+
+    // Release the native splash immediately after the root view exists. The
+    // AuthGate's React loading view remains visible while auth initializes, so
+    // a slow storage/SDK call can no longer leave the OS splash on screen.
+    void SplashScreen.hideAsync()
+      .then(() => console.info('[Startup] NATIVE_SPLASH_HIDDEN root-mount'))
+      .catch((error) => console.error('[Startup] Native splash hide failed:', error));
 
     return () => {
-      if (fallback) clearTimeout(fallback);
+      cancelled = true;
+      clearTimeout(fallback);
     };
   }, []);
 
@@ -221,8 +211,6 @@ export default function RootLayout() {
     applyWebPolish();
     if (Platform.OS !== 'web') {
       console.log('[App] Initializing database...');
-      // Load optional native startup services only after the first React frame.
-      // Import or initialization failures must never block root mount.
       import('@/lib/db/core')
         .then(({ initDatabase }) => initDatabase())
         .then(() => console.log('[App] Database ready'))
@@ -244,19 +232,19 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <SubscriptionProvider>
-          <ThemeProvider>
-            <GestureHandlerRootView style={layoutStyles.root}>
-              <View style={layoutStyles.root}>
-                <AuthGate>
-                  <PaywallGate>
-                    <RootLayoutNav />
-                  </PaywallGate>
-                </AuthGate>
-                <NetworkBanner />
-                <GestureOnboardingGate />
-              </View>
-            </GestureHandlerRootView>
-          </ThemeProvider>
+            <ThemeProvider>
+              <GestureHandlerRootView style={layoutStyles.root}>
+                <View style={layoutStyles.root}>
+                  <AuthGate>
+                    <PaywallGate>
+                      <RootLayoutNav />
+                    </PaywallGate>
+                  </AuthGate>
+                  <NetworkBanner />
+                  <GestureOnboardingGate />
+                </View>
+              </GestureHandlerRootView>
+            </ThemeProvider>
           </SubscriptionProvider>
         </AuthProvider>
       </SafeAreaProvider>
