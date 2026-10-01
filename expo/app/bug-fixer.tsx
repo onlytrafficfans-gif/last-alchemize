@@ -20,7 +20,6 @@ import {
   getAppDiagnostics,
   clearCorruptedAuthCache,
   resetHealthKitConnection,
-  resyncSubscription,
 } from '@/lib/diagnostics';
 
 const SYSTEM_PROMPT = `You are the in-app diagnostics assistant for Alchemize, a personal wellness app (habits, fitness, nutrition, finances, journaling).
@@ -28,12 +27,11 @@ A user is describing something broken. Ask at most one clarifying question if tr
 Use get_app_diagnostics first to see real app state before guessing. Only call a repair tool when it's actually likely to fix what the user described:
 - clear_corrupted_auth_cache: sign-in stuck, "can't log in", app crashes on launch right after login/signup.
 - reset_healthkit_connection: Apple Health sync stuck, permission stuck in a bad state, "HealthKit says denied but I allowed it".
-- resync_subscription: "I paid but it still shows free", Pro features locked after a real purchase.
-None of these tools can fix bugs in the app's code itself — they only repair corrupted local state and re-sync with external services (HealthKit, RevenueCat). If the problem is a real code bug (wrong calculation, crash unrelated to the above, UI glitch), say so plainly and tell the user to report it — do not pretend to fix it.
+None of these tools can fix bugs in the app's code itself — they only repair corrupted local state and reset the local HealthKit connection. If the problem is a real code bug (wrong calculation, crash unrelated to the above, UI glitch), say so plainly and tell the user to report it — do not pretend to fix it.
 Keep replies short (2-4 sentences), plain language, no markdown.`;
 
 const getDiagnosticsTool = createRorkTool({
-  description: "Read-only snapshot of the app's current state: feature flags, HealthKit status, subscription status, and any corrupted local storage. Always call this before diagnosing.",
+  description: "Read-only snapshot of the app's current state: feature flags, HealthKit status, and any corrupted local storage. Always call this before diagnosing.",
   zodSchema: z.object({}),
   execute: async () => JSON.stringify(await getAppDiagnostics()),
 });
@@ -50,17 +48,10 @@ const resetHealthKitTool = createRorkTool({
   execute: async () => JSON.stringify(await resetHealthKitConnection()),
 });
 
-const resyncSubscriptionTool = createRorkTool({
-  description: 'Re-pulls purchase/subscription state from the app store and RevenueCat. Use when a user paid but Pro features are still locked.',
-  zodSchema: z.object({}),
-  execute: async () => JSON.stringify(await resyncSubscription()),
-});
-
 const TOOLS = {
   get_app_diagnostics: getDiagnosticsTool,
   clear_corrupted_auth_cache: clearAuthCacheTool,
   reset_healthkit_connection: resetHealthKitTool,
-  resync_subscription: resyncSubscriptionTool,
 };
 
 export default function BugFixerScreen() {
@@ -120,8 +111,8 @@ export default function BugFixerScreen() {
               <Wrench color="#a78bfa" size={32} />
               <Text style={styles.emptyTitle}>Describe what&apos;s broken</Text>
               <Text style={styles.emptySubtitle}>
-                I can check app state and fix common issues: stuck sign-in, Apple Health not syncing, or a
-                purchase not unlocking Pro. For anything else, I&apos;ll tell you it needs a real fix from the dev team.
+                I can check app state and fix common issues such as stuck sign-in or Apple Health not syncing.
+                For anything else, I&apos;ll tell you it needs a real fix from the dev team.
               </Text>
             </View>
           )}

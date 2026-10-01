@@ -9,12 +9,10 @@ import { ChevronLeft } from "lucide-react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
-import { SubscriptionProvider, useSubscription } from "@/contexts/subscription-context";
 import NetworkBanner from "@/components/NetworkBanner";
 import GestureOnboarding from "@/components/GestureOnboarding";
 import { applyWebPolish } from "@/lib/web-polish";
 import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
-import { isGatedFeature } from "@/constants/features";
 import { createSplashHider } from "@/lib/startup";
 
 console.info('[Startup] JS_STARTED');
@@ -100,30 +98,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function PaywallGate({ children }: { children: React.ReactNode }) {
-  const { isPro, isLoading: subLoading } = useSubscription();
-  const router = useRouter();
-  const segments = useSegments();
-  const navState = useRootNavigationState();
-
-  const topSegment = segments[0] as string | undefined;
-  const isGatedRoute = !!topSegment && isGatedFeature(topSegment);
-
-  useEffect(() => {
-    if (subLoading) return;
-    if (!navState?.key) return;
-    if (isGatedRoute && !isPro) {
-      router.replace('/paywall');
-    }
-  }, [isGatedRoute, isPro, subLoading, navState?.key, router]);
-
-  if (isGatedRoute && (subLoading || !isPro)) {
-    return <View style={layoutStyles.splash} />;
-  }
-
-  return <>{children}</>;
-}
-
 function RootLayoutNav() {
   return (
     <Stack
@@ -142,7 +116,6 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="auth" options={{ title: "Welcome", headerShown: false }} />
-      <Stack.Screen name="paywall" options={{ title: "Alchemize Pro", headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="index" options={{ title: "Alchemize", headerShown: false }} />
       <Stack.Screen name="manifestation-board/index" options={{ title: "Portal Board", headerShown: true }} />
       <Stack.Screen name="manifestation-board/[id]" options={{ title: "Manifestation Detail", headerStyle: { backgroundColor: '#0c0520' }, headerTintColor: '#ffffff' }} />
@@ -219,21 +192,17 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <AuthProvider>
-          <SubscriptionProvider>
-            <ThemeProvider>
-              <GestureHandlerRootView style={layoutStyles.root}>
-                <View style={layoutStyles.root}>
-                  <AuthGate>
-                    <PaywallGate>
-                      <RootLayoutNav />
-                    </PaywallGate>
-                  </AuthGate>
-                  <NetworkBanner />
-                  <GestureOnboardingGate />
-                </View>
-              </GestureHandlerRootView>
-            </ThemeProvider>
-          </SubscriptionProvider>
+          <ThemeProvider>
+            <GestureHandlerRootView style={layoutStyles.root}>
+              <View style={layoutStyles.root}>
+                <AuthGate>
+                  <RootLayoutNav />
+                </AuthGate>
+                <NetworkBanner />
+                <GestureOnboardingGate />
+              </View>
+            </GestureHandlerRootView>
+          </ThemeProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </QueryClientProvider>

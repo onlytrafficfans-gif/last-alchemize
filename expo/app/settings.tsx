@@ -953,7 +953,7 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.settingTextContainer}>
               <Text style={styles.settingTitle}>Bug Fixer</Text>
-              <Text style={styles.settingSubtitle}>Diagnose and fix sign-in, sync, and subscription issues</Text>
+              <Text style={styles.settingSubtitle}>Diagnose and fix sign-in and sync issues</Text>
             </View>
           </View>
           <ChevronRight color="#666" size={20} />
@@ -1187,11 +1187,6 @@ export default function SettingsScreen() {
                 Your use of Alchemize is also governed by our Privacy Policy. Where these Terms and the Privacy Policy conflict, the Privacy Policy controls for privacy-related topics.
               </Text>
 
-              <Text style={styles.legalSectionTitle}>10. Subscriptions & Payments (if applicable)</Text>
-              <Text style={styles.legalText}>
-                If Alchemize offers paid features, subscription terms, pricing, and billing details will be shown at purchase. Subscriptions auto-renew until cancelled. Payments are processed by the relevant app store (Apple App Store or Google Play). Manage or cancel anytime in your app store account settings. Refunds follow the app store&apos;s refund policy unless otherwise required by law.
-              </Text>
-
               <Text style={styles.legalSectionTitle}>11. Changes to the App</Text>
               <Text style={styles.legalText}>
                 We may update, modify, or discontinue features of the App at any time. We are not liable for any modifications, suspensions, or discontinuation.
@@ -1204,7 +1199,7 @@ export default function SettingsScreen() {
 
               <Text style={styles.legalSectionTitle}>13. Limitation of Liability</Text>
               <Text style={styles.legalText}>
-                To the maximum extent permitted by law, Alchemize and its creators will not be liable for indirect, incidental, special, consequential, or punitive damages, or any loss of data, profits, or revenue arising from your use of the App, including reliance on AI-generated content or third-party services (Apple, Google, Supabase, RevenueCat, and AI providers).
+                To the maximum extent permitted by law, Alchemize and its creators will not be liable for indirect, incidental, special, consequential, or punitive damages, or any loss of data, profits, or revenue arising from your use of the App, including reliance on AI-generated content or third-party services (Apple, Google, Supabase, and AI providers).
               </Text>
 
               <Text style={styles.legalSectionTitle}>14. Termination</Text>
@@ -1388,7 +1383,6 @@ export default function SettingsScreen() {
               </Text>
               <Text style={styles.legalBullet}>• Service providers that help operate the App (hosting, database, analytics, storage) under confidentiality obligations</Text>
               <Text style={styles.legalBullet}>• AI service providers, for content you submit to AI-powered features</Text>
-              <Text style={styles.legalBullet}>• Payment and subscription processors (Apple, Google, RevenueCat), for purchase and subscription management</Text>
               <Text style={styles.legalBullet}>• Legal authorities if required by law or to protect safety and rights</Text>
 
               <Text style={styles.legalSectionTitle}>7. Data Storage & Security</Text>

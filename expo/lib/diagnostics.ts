@@ -4,7 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureStorage } from '@/lib/secure-storage';
 import { featureFlags } from '@/config/featureFlags';
 import { isHealthKitSupported, checkHealthKitPermissions, revokeHealthKitPermissions } from '@/lib/healthkit';
-import { checkProEntitlement, syncPurchases, restorePurchases } from '@/lib/purchases';
 
 const AUTH_SECURE_KEY = 'alchemize_auth_session';
 const LEGACY_AUTH_KEY = '@alchemize_auth';
@@ -23,7 +22,6 @@ export interface DiagnosticsSnapshot {
   buildIdentifier: string | null;
   featureFlags: Record<string, boolean>;
   healthKit: { supported: boolean; reason: string; permissionStatus: string };
-  subscription: { isPro: boolean };
   corruptedStorageKeys: string[];
 }
 
@@ -46,9 +44,8 @@ async function findCorruptedJsonKeys(): Promise<string[]> {
 
 /** Read-only snapshot of app/runtime state — safe to call anytime, mutates nothing. */
 export async function getAppDiagnostics(): Promise<DiagnosticsSnapshot> {
-  const [healthPermissions, isPro, corruptedStorageKeys] = await Promise.all([
+  const [healthPermissions, corruptedStorageKeys] = await Promise.all([
     checkHealthKitPermissions(),
-    checkProEntitlement(),
     findCorruptedJsonKeys(),
   ]);
   const healthSupport = isHealthKitSupported();
@@ -66,7 +63,6 @@ export async function getAppDiagnostics(): Promise<DiagnosticsSnapshot> {
       reason: healthSupport.reason,
       permissionStatus: healthPermissions.overallStatus,
     },
-    subscription: { isPro },
     corruptedStorageKeys,
   };
 }
@@ -94,17 +90,4 @@ export async function clearCorruptedAuthCache(): Promise<{ cleared: string[] }> 
 export async function resetHealthKitConnection(): Promise<{ success: boolean }> {
   await revokeHealthKitPermissions();
   return { success: true };
-}
-
-/** Re-pulls purchase state from the store and RevenueCat — fixes "I paid but the app still shows free". */
-export async function resyncSubscription(): Promise<{ isPro: boolean; message: string }> {
-  await syncPurchases();
-  await restorePurchases();
-  const isPro = await checkProEntitlement();
-  return {
-    isPro,
-    message: isPro
-      ? 'Pro subscription confirmed active.'
-      : 'Resynced with the store, but no active Pro subscription was found for this account.',
-  };
 }

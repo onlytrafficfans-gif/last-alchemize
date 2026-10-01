@@ -5,9 +5,7 @@ import { TouchableOpacity } from '@/components/HapticTouchable';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Settings, ChevronLeft, ChevronRight, Lock } from 'lucide-react-native';
-import { useSubscription } from '@/contexts/subscription-context';
-import { isGatedFeature } from '@/constants/features';
+import { Settings, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { ASSETS } from '@/constants/assets';
 import { OPTIMIZED_IMAGE_URLS } from '@/constants/image-config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -150,7 +148,6 @@ export default function HomeScreen() {
   }, [currentPage, goToPage]);
   const [featureCards, setFeatureCards] = useState<FeatureCard[]>(ALL_FEATURE_CARDS);
   const { theme } = useTheme();
-  const { isPro } = useSubscription();
 
 
   const loadFeatureVisibility = async () => {
@@ -216,7 +213,6 @@ export default function HomeScreen() {
       featureCards={featureCards}
       onCardPress={handleCardPress}
       router={router}
-      isPro={isPro}
     />;
   }
 
@@ -318,11 +314,6 @@ export default function HomeScreen() {
                     <View style={styles.cardTextContainer}>
                       <View style={styles.cardTitleRow}>
                         <Text style={styles.cardTitle}>{card.title}</Text>
-                        {isGatedFeature(card.id) && !isPro && (
-                          <View style={styles.lockBadge}>
-                            <Lock color="#fff" size={14} />
-                          </View>
-                        )}
                       </View>
                       <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
                     </View>
@@ -507,17 +498,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
     includeFontPadding: false,
   },
-  lockBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    marginBottom: 8,
-  },
   cardSubtitle: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
@@ -678,10 +658,9 @@ interface OrbitalHomeScreenProps {
   featureCards: FeatureCard[];
   onCardPress: (route: string) => void;
   router: any;
-  isPro: boolean;
 }
 
-function OrbitalHomeScreen({ featureCards, onCardPress, router, isPro }: OrbitalHomeScreenProps) {
+function OrbitalHomeScreen({ featureCards, onCardPress, router }: OrbitalHomeScreenProps) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -913,11 +892,6 @@ function OrbitalHomeScreen({ featureCards, onCardPress, router, isPro }: Orbital
                   <View style={orbitalStyles.planetInfo}>
                     <View style={orbitalStyles.planetTitleRow}>
                       <Text style={orbitalStyles.planetTitle}>{card.title}</Text>
-                      {isGatedFeature(card.id) && !isPro && (
-                        <View style={orbitalStyles.lockBadge}>
-                          <Lock color="#fff" size={13} />
-                        </View>
-                      )}
                     </View>
                     <Text style={orbitalStyles.planetSubtitle}>
                       {card.subtitle}
@@ -1145,17 +1119,6 @@ const orbitalStyles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
     includeFontPadding: false,
-  },
-  lockBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-    marginBottom: 8,
   },
   planetSubtitle: {
     fontSize: 14,
