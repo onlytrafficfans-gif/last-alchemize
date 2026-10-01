@@ -12,6 +12,8 @@ services:
       - EXPO_NO_INTERACTION=true
       # Bare var — platform sets it; Metro ignores it, harmless if unset
       - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+      # Used by app.config.js to allow the preview origin in Expo's CORS middleware
+      - BASE44_PUBLIC_HOST_SUFFIX
     command:
       [
         "sh",

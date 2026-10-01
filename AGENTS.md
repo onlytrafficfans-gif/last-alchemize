@@ -45,5 +45,13 @@ real credentials to function (but won't block startup):
 ## Dev Notes
 - Expo CLI `--host` only accepts `lan|tunnel|localhost`; `--host lan` binds
   to all interfaces inside the container.
+- **CORS**: Expo's `CorsMiddleware` rejects requests whose `Origin` doesn't
+  match the request `Host` or the `extra.router.origin`/`headOrigin` from
+  app config. `expo/app.config.js` dynamically sets `extra.router.headOrigin`
+  to the preview origin (`https://3000-${BASE44_PUBLIC_HOST_SUFFIX}`) so the
+  browser preview proxy is allowed. The `BASE44_PUBLIC_HOST_SUFFIX` env var
+  is passed through compose as a bare environment entry.
 - Package manager: Bun (`bun.lock`). Install: `bun install --frozen-lockfile`.
 - Live reload works via Metro's file watcher on the bind-mounted `expo/` dir.
+- Failed HEAD `/` requests in the preview are harmless healthcheck pings —
+  Expo's dev server only handles GET.
