@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs';
 
 import { setCurrentUserId } from '@/lib/db/core';
 import { secureStorage } from '@/lib/secure-storage';
+import { runBootTask } from '@/lib/startup';
 
 async function generateToken(userId: string): Promise<string> {
   const random = await Crypto.getRandomBytesAsync(32);
@@ -55,20 +56,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     // could in principle never settle. Without a timeout, that would leave
     // isLoading stuck true forever and freeze the app on the splash screen
     // with no way to recover. Race against a bound so boot always proceeds.
+    // On timeout/failure we proceed unauthenticated; isActive() stops a late
+    // restore from logging the user in after the auth screen is showing.
     const BOOT_TIMEOUT_MS = 8000;
-    const timeout = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        console.warn('[Auth] loadAuthState timed out after', BOOT_TIMEOUT_MS, 'ms — proceeding unauthenticated');
-        resolve();
-      }, BOOT_TIMEOUT_MS);
-    });
-    void Promise.race([loadAuthState(), timeout]).finally(() => {
+    const boot = runBootTask(loadAuthState, BOOT_TIMEOUT_MS, 'loadAuthState', (outcome) => {
       setIsLoading(false);
-      console.info('[Startup] AUTH_FINISHED');
+      console.info('[Startup] AUTH_FINISHED', outcome);
     });
+    return boot.cancel;
   }, []);
 
-  const loadAuthState = async () => {
+  const loadAuthState = async (isActive: () => boolean = () => true) => {
     try {
       console.log('[Auth] Loading auth state...');
       let [storedAuth, storedRememberMe] = await Promise.all([
@@ -90,6 +88,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         try {
           const auth = JSON.parse(storedAuth) as AuthState;
           if (auth && typeof auth === 'object' && auth.user && typeof auth.user === 'object') {
+            if (!isActive()) return;
             setAuthState(auth);
             setCurrentUserId(auth.user.id);
             console.log('[Auth] Auth state loaded successfully:', auth.user?.email);
@@ -111,7 +110,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         console.log('[Auth] No stored auth found');
       }
 
-      if (storedRememberMe === 'true') {
+      if (storedRememberMe === 'true' && isActive()) {
         setRememberMeState(true);
       }
     } catch (error) {

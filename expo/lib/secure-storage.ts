@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { withTimeout as withBoundedTimeout } from '@/lib/startup';
 
 /**
  * Cross-platform secure key/value storage.
@@ -15,12 +16,7 @@ const SECURE_STORE_TIMEOUT_MS = 5000;
 // rather than fail fast. Every native call is time-boxed so a caller — most
 // critically auth-context's boot-time read — can never wait on this forever.
 function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`SecureStore ${label} timed out after ${SECURE_STORE_TIMEOUT_MS}ms`)), SECURE_STORE_TIMEOUT_MS)
-    ),
-  ]);
+  return withBoundedTimeout(promise, SECURE_STORE_TIMEOUT_MS, `SecureStore ${label}`);
 }
 
 export const secureStorage = {

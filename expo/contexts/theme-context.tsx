@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { withTimeout } from '@/lib/startup';
 import createContextHook from '@nkzw/create-context-hook';
 
 const THEME_STORAGE_KEY = '@alchemize_theme';
@@ -16,7 +17,7 @@ export const [ThemeProvider, useTheme] = createContextHook(() => {
 
   const loadTheme = async () => {
     try {
-      const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY).catch(() => null);
+      const stored = await withTimeout(AsyncStorage.getItem(THEME_STORAGE_KEY), 3000, 'loadTheme').catch(() => null);
       if (stored && typeof stored === 'string' && (stored === 'cosmic-dark' || stored === 'cosmic')) {
         setThemeState(stored as Theme);
         console.log('[Theme] Loaded theme:', stored);

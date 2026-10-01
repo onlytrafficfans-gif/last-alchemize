@@ -15,6 +15,7 @@ import GestureOnboarding from "@/components/GestureOnboarding";
 import { applyWebPolish } from "@/lib/web-polish";
 import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
 import { isGatedFeature } from "@/constants/features";
+import { createSplashHider } from "@/lib/startup";
 
 console.info('[Startup] JS_STARTED');
 
@@ -24,6 +25,8 @@ console.info('[Startup] JS_STARTED');
 void SplashScreen.preventAutoHideAsync().catch((error) => {
   console.warn('[Startup] Could not prevent native splash auto-hide:', error);
 });
+
+const hideNativeSplash = createSplashHider(() => SplashScreen.hideAsync());
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -185,26 +188,11 @@ export default function RootLayout() {
   useEffect(() => {
     console.info('[Startup] ROOT_MOUNTED');
 
-    let cancelled = false;
-    const fallback = setTimeout(() => {
-      if (cancelled) return;
-      console.warn('[Startup] Native splash fallback release');
-      void SplashScreen.hideAsync().catch((error) => {
-        console.error('[Startup] Native splash fallback hide failed:', error);
-      });
-    }, 3000);
-
     // Release the native splash immediately after the root view exists. The
     // AuthGate's React loading view remains visible while auth initializes, so
     // a slow storage/SDK call can no longer leave the OS splash on screen.
-    void SplashScreen.hideAsync()
-      .then(() => console.info('[Startup] NATIVE_SPLASH_HIDDEN root-mount'))
-      .catch((error) => console.error('[Startup] Native splash hide failed:', error));
-
-    return () => {
-      cancelled = true;
-      clearTimeout(fallback);
-    };
+    // hideNativeSplash is idempotent and never rejects (no double-hide race).
+    void hideNativeSplash('root-mount');
   }, []);
 
   useEffect(() => {

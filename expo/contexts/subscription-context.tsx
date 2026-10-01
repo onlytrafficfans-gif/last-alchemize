@@ -14,6 +14,7 @@ import {
 } from '@/lib/purchases';
 import type { CustomerInfo } from 'react-native-purchases';
 import { useAuth } from '@/contexts/auth-context';
+import { withTimeout } from '@/lib/startup';
 
 interface SubscriptionContextValue {
   isLoading: boolean;
@@ -79,21 +80,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         // must not leave a paying-eligible user stuck forever. Same defensive
         // pattern as the auth/database boot-hang fix.
         const SUBSCRIPTION_INIT_TIMEOUT_MS = 8000;
-        const timedOut = Symbol('timeout');
-        const result = await Promise.race([
+        await withTimeout(
           (async () => {
             const initialized = await initPurchases(currentUserId);
-            if (!initialized) return false;
+            if (!initialized || !mounted) return;
             await loadSubscriptionData();
-            return true;
           })(),
-          new Promise<typeof timedOut>((resolve) =>
-            setTimeout(() => resolve(timedOut), SUBSCRIPTION_INIT_TIMEOUT_MS)
-          ),
-        ]);
-        if (result === timedOut) {
-          console.warn('[Subscription] initPurchases timed out after', SUBSCRIPTION_INIT_TIMEOUT_MS, 'ms');
-        }
+          SUBSCRIPTION_INIT_TIMEOUT_MS,
+          'initPurchases',
+        ).catch((error) => console.warn('[Subscription] init failed:', error));
         // Do not grant Pro on a failed or timed-out init — that would silently
         // bypass the paywall for anyone who can make RevenueCat init fail or
         // hang (bad network, misconfigured key, SDK error). Leave isPro at

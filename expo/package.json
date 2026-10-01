@@ -8,6 +8,8 @@
     "start-web": "expo start --web",
     "start-web-dev": "DEBUG=expo* expo start --web",
     "lint": "expo lint",
+    "test": "bun test lib/__tests__",
+    "typecheck": "tsc --noEmit",
     "validate:handoff": "node scripts/validate-handoff.js",
     "validate:routes": "node scripts/route-manifest-check.js",
     "validate:health": "node scripts/repo-health-check.js",
