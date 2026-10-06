@@ -1,0 +1,22 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "EXPO_PUBLIC_SUPABASE_URL",
+      "description": "Supabase project URL (optional — app falls back to local storage without it). Find in Supabase dashboard > Project Settings > API.",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "EXPO_PUBLIC_SUPABASE_ANON_KEY",
+      "description": "Supabase anon public key (optional — app falls back to local storage without it). Find in Supabase dashboard > Project Settings > API.",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "EXPO_PUBLIC_RORK_API_BASE_URL",
+      "description": "Base URL of the tRPC/Hono backend (optional — app warns but boots without it).",
+      "requiredAtBoot": false
+    }
+  ]
+}
