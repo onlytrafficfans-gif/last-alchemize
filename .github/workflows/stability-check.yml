@@ -30,6 +30,9 @@ jobs:
       - name: TypeScript check
         run: bunx tsc --noEmit
 
+      - name: Startup and service regression tests
+        run: bun test lib/__tests__ services/__tests__
+
       - name: Lint
         run: bunx expo lint
 
@@ -50,3 +53,6 @@ jobs:
 
       - name: Export Android bundle
         run: bunx expo export --platform android
+
+      - name: Export production iOS bundle
+        run: bunx expo export --platform ios

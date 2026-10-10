@@ -69,12 +69,12 @@ describe('runBootTask (auth loading state)', () => {
 });
 
 describe('createSplashHider', () => {
-  test('normal: hides once even when called repeatedly', async () => {
+  test('deduplicates simultaneous calls but retries after a later layout', async () => {
     const hide = mock(() => Promise.resolve());
     const hider = createSplashHider(hide);
     await Promise.all([hider('a'), hider('b')]);
     await hider('c');
-    expect(hide).toHaveBeenCalledTimes(1);
+    expect(hide).toHaveBeenCalledTimes(2);
   });
 
   test('rejected hideAsync does not throw', async () => {
@@ -91,5 +91,26 @@ describe('createSplashHider', () => {
     const hide = mock(() => never());
     void createSplashHider(hide)('root-mount');
     expect(hide).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failed native hide can be retried after layout', async () => {
+    let attempts = 0;
+    const hide = mock(async () => {
+      if (++attempts === 1) throw new Error('view not ready');
+    });
+    const hider = createSplashHider(hide);
+    await hider('mount');
+    await hider('layout');
+    await hider('layout-again');
+    expect(hide).toHaveBeenCalledTimes(3);
+  });
+
+  test('a stalled native hide times out and permits recovery', async () => {
+    let attempts = 0;
+    const hide = mock(() => ++attempts === 1 ? never() : Promise.resolve());
+    const hider = createSplashHider(hide, 10);
+    await hider('mount');
+    await hider('layout');
+    expect(hide).toHaveBeenCalledTimes(2);
   });
 });

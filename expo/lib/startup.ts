@@ -60,10 +60,10 @@ export function runBootTask(
 }
 
 /**
- * Returns an idempotent splash hider: repeated calls share one native
- * hideAsync call, and failures are logged, never thrown.
+ * Deduplicates in-flight hide requests. Native hide can resolve without removing
+ * a view that is not ready yet, so later layout/recovery calls must try again.
  */
-export function createSplashHider(hideAsync: () => Promise<unknown>) {
+export function createSplashHider(hideAsync: () => Promise<unknown>, timeoutMs = 1500) {
   let pending: Promise<void> | null = null;
   return (reason: string): Promise<void> => {
     if (!pending) {
@@ -73,10 +73,13 @@ export function createSplashHider(hideAsync: () => Promise<unknown>) {
       } catch (error) {
         call = Promise.reject(error);
       }
-      pending = call.then(
-        () => console.info('[Startup] NATIVE_SPLASH_HIDDEN', reason),
-        (error) => console.warn('[Startup] Native splash hide failed:', error),
-      );
+      pending = withTimeout(call, timeoutMs, 'hideNativeSplash').then(
+        () => console.info('[Startup] NATIVE_SPLASH_HIDE_COMPLETED', reason),
+        (error) => {
+          pending = null;
+          console.warn('[Startup] Native splash hide failed:', error);
+        },
+      ).finally(() => { pending = null; });
     }
     return pending;
   };

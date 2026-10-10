@@ -7,6 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'expo-router';
+import { withTimeout } from '@/lib/startup';
 import { Mail, Lock, User, Eye, EyeOff, Globe, ChevronRight, ShieldAlert, Check } from 'lucide-react-native';
 
 const TERMS_ACCEPTED_KEY = '@alchemize/terms_accepted_v1';
@@ -107,20 +108,24 @@ export default function AuthScreen() {
   const t = TRANSLATIONS[language];
 
   useEffect(() => {
+    let mounted = true;
+    console.info('[Startup] AUTH_SCREEN_MOUNTED');
     (async () => {
       try {
-        const v = await AsyncStorage.getItem(TERMS_ACCEPTED_KEY);
+        const v = await withTimeout(AsyncStorage.getItem(TERMS_ACCEPTED_KEY), 3000, 'termsConsent');
+        if (!mounted) return;
         if (v === 'true') {
           setTermsAccepted(true);
         } else {
           setShowTermsModal(true);
         }
       } catch {
-        setShowTermsModal(true);
+        if (mounted) setShowTermsModal(true);
       } finally {
-        setCheckingTerms(false);
+        if (mounted) setCheckingTerms(false);
       }
     })();
+    return () => { mounted = false; };
   }, []);
 
   const acceptTerms = async () => {
