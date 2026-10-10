@@ -45,3 +45,5 @@ rork-eslint.config.js
 core
 node_modules
 .expo
+# Local verification exports
+dist-smoke/

@@ -85,7 +85,6 @@ You can test Rork apps in Expo Go or Rork iOS app. You don't need XCode or Andro
 **When do you need Custom Development Builds?**
 
 - Native authentication (Face ID, Touch ID, Apple Sign In)
-- In-app purchases and subscriptions
 - Push notifications
 - Custom native modules
 
@@ -203,7 +202,6 @@ For advanced native features, you'll need to create a Custom Development Build i
 ### **When do you need a Custom Development Build?**
 
 - **Native Authentication**: Face ID, Touch ID, Apple Sign In, Google Sign In
-- **In-App Purchases**: App Store and Google Play subscriptions
 - **Advanced Native Features**: Third-party SDKs, platform-specifc features (e.g. Widgets on iOS)
 - **Background Processing**: Background tasks, location tracking
 
@@ -261,25 +259,6 @@ Send notifications to your users:
 
 - **Expo Notifications** - Cross-platform push notifications
 - **Firebase Cloud Messaging** - Advanced notification features
-
-### **Add Payments**
-
-Monetize your app:
-
-**Web & Credit Card Payments (works in Expo Go):**
-
-- **Stripe** - Credit card payments and subscriptions - [Expo + Stripe Guide](https://docs.expo.dev/guides/using-stripe/)
-- **PayPal** - PayPal payments integration - [Setup Guide](https://developer.paypal.com/docs/checkout/mobile/react-native/)
-
-**Native In-App Purchases (requires Custom Development Build):**
-
-- **RevenueCat** - Cross-platform in-app purchases and subscriptions - [Expo Integration Guide](https://www.revenuecat.com/docs/expo)
-- **Expo In-App Purchases** - Direct App Store/Google Play integration - [Implementation Guide](https://docs.expo.dev/versions/latest/sdk/in-app-purchases/)
-
-**Paywall Optimization:**
-
-- **Superwall** - Paywall A/B testing and optimization - [React Native SDK](https://docs.superwall.com/docs/react-native)
-- **Adapty** - Mobile subscription analytics and paywalls - [Expo Integration](https://docs.adapty.io/docs/expo)
 
 ## I want to use a custom domain - is that possible?
 

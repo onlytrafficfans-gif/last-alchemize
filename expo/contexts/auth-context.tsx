@@ -8,6 +8,8 @@ import bcrypt from 'bcryptjs';
 
 import { setCurrentUserId } from '@/lib/db/core';
 import { secureStorage } from '@/lib/secure-storage';
+import { runBootTask } from '@/lib/startup';
+import { parseStoredSession } from '@/lib/auth-session';
 
 async function generateToken(userId: string): Promise<string> {
   const random = await Crypto.getRandomBytesAsync(32);
@@ -55,20 +57,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     // could in principle never settle. Without a timeout, that would leave
     // isLoading stuck true forever and freeze the app on the splash screen
     // with no way to recover. Race against a bound so boot always proceeds.
+    // On timeout/failure we proceed unauthenticated; isActive() stops a late
+    // restore from logging the user in after the auth screen is showing.
     const BOOT_TIMEOUT_MS = 8000;
-    const timeout = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        console.warn('[Auth] loadAuthState timed out after', BOOT_TIMEOUT_MS, 'ms — proceeding unauthenticated');
-        resolve();
-      }, BOOT_TIMEOUT_MS);
-    });
-    void Promise.race([loadAuthState(), timeout]).finally(() => {
+    const boot = runBootTask(loadAuthState, BOOT_TIMEOUT_MS, 'loadAuthState', (outcome) => {
       setIsLoading(false);
-      console.info('[Startup] AUTH_FINISHED');
+      console.info('[Startup] AUTH_FINISHED', outcome);
     });
+    return boot.cancel;
   }, []);
 
-  const loadAuthState = async () => {
+  const loadAuthState = async (isActive: () => boolean = () => true) => {
     try {
       console.log('[Auth] Loading auth state...');
       let [storedAuth, storedRememberMe] = await Promise.all([
@@ -86,37 +85,28 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         }
       }
 
-      if (storedAuth && typeof storedAuth === 'string' && storedAuth.trim().startsWith('{')) {
-        try {
-          const auth = JSON.parse(storedAuth) as AuthState;
-          if (auth && typeof auth === 'object' && auth.user && typeof auth.user === 'object') {
-            setAuthState(auth);
-            setCurrentUserId(auth.user.id);
-            console.log('[Auth] Auth state loaded successfully:', auth.user?.email);
-            console.log('[Auth] Current user ID restored:', auth.user.id);
-          } else {
-            console.warn('[Auth] Invalid auth structure, clearing');
-            await secureStorage.removeItem(AUTH_SECURE_KEY);
-          }
-        } catch (parseError) {
-          console.warn('[Auth] Invalid auth JSON, clearing:', parseError);
-          await secureStorage.removeItem(AUTH_SECURE_KEY);
-          await AsyncStorage.removeItem(USERS_STORAGE_KEY).catch(() => {});
-        }
-      } else if (storedAuth) {
-        console.warn('[Auth] Corrupted auth data detected, clearing all');
-        await secureStorage.removeItem(AUTH_SECURE_KEY);
-        await AsyncStorage.multiRemove([USERS_STORAGE_KEY, REMEMBER_ME_KEY]).catch(() => {});
+      if (!isActive()) return;
+      const restored = storedAuth ? parseStoredSession(storedAuth) : null;
+      if (restored) {
+        setCurrentUserId(restored.user.id);
+        setAuthState(restored);
+        console.info('[Startup] SESSION_RESTORED');
       } else {
-        console.log('[Auth] No stored auth found');
+        setCurrentUserId(null);
+        console.info('[Startup] SESSION_ABSENT_OR_INVALID');
+        if (storedAuth) {
+          // A damaged session must never erase the local account registry.
+          await secureStorage.removeItem(AUTH_SECURE_KEY);
+          if (isActive()) await AsyncStorage.removeItem(AUTH_STORAGE_KEY).catch(() => {});
+        }
       }
 
-      if (storedRememberMe === 'true') {
+      if (storedRememberMe === 'true' && isActive()) {
         setRememberMeState(true);
       }
     } catch (error) {
       console.error('[Auth] Error loading auth state:', error);
-      await AsyncStorage.multiRemove([AUTH_STORAGE_KEY, USERS_STORAGE_KEY, REMEMBER_ME_KEY]).catch(() => {});
+      throw error;
     }
   };
 

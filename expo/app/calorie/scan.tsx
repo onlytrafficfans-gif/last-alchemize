@@ -1,6 +1,6 @@
 import { invalidateFoodLogs } from '../../services/queryInvalidationService';
-import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { View, StyleSheet, Text, Platform, ActivityIndicator, ScrollView, TextInput, Alert, Animated, Dimensions, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { View, StyleSheet, Text, Platform, ActivityIndicator, ScrollView, TextInput, Alert, Animated, Dimensions, KeyboardAvoidingView, Linking } from 'react-native';
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -31,43 +31,15 @@ import {
   Brain,
   ShieldCheck,
 } from 'lucide-react-native';
-import { generateObject } from '@rork-ai/toolkit-sdk';
-import { z } from 'zod';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { requestFoodAnalysis } from '@/services/foodScanClient';
+import { FoodAnalysisSchema, type FoodAnalysis } from '@/services/foodAnalysisSchema';
 import { foodLogsDb, appointmentsDb } from '@/lib/db';
 import { calculateFoodTotals, getAutoMealType, getConfidenceLabel, getHealthScoreColor, parseOptionalNumber } from '@/services/calorieAnalysisService';
 import type { FoodLog, MealType, Appointment } from '@/types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const FoodAnalysisSchema = z.object({
-  foods: z.array(z.object({
-    name: z.string().describe('Specific name of the food item, including preparation method if visible (e.g., "Grilled Chicken Breast" not just "Chicken")'),
-    servingSize: z.string().describe('Precise estimated serving size with weight in grams AND volume/count (e.g., "1 medium banana (~118g)", "1 cup cooked rice (~185g)", "6 oz grilled salmon (~170g)")'),
-    calories: z.number().describe('Estimated calories based on USDA nutritional database values for the identified food and estimated portion'),
-    protein: z.number().describe('Estimated protein in grams, using standard nutritional references'),
-    carbs: z.number().describe('Estimated total carbohydrates in grams'),
-    fat: z.number().describe('Estimated total fat in grams'),
-    fiber: z.number().describe('Estimated dietary fiber in grams'),
-    sugar: z.number().describe('Estimated sugar in grams'),
-    saturatedFat: z.number().describe('Estimated saturated fat in grams'),
-    sodium: z.number().describe('Estimated sodium in milligrams'),
-    confidence: z.number().min(0).max(100).describe('Confidence level 0-100 for this specific food identification'),
-    portionNotes: z.string().describe('Brief note about how the portion was estimated, e.g., "plate appears 10 inch diameter, portion covers ~40%"'),
-    category: z.string().describe('Food category: protein, grain, vegetable, fruit, dairy, fat, beverage, condiment, mixed_dish, dessert, snack'),
-  })),
-  totalCalories: z.number().describe('Sum of all food calories'),
-  totalProtein: z.number().describe('Sum of all food protein'),
-  totalCarbs: z.number().describe('Sum of all food carbs'),
-  totalFat: z.number().describe('Sum of all food fat'),
-  totalFiber: z.number().describe('Sum of all food fiber'),
-  mealTypeGuess: z.string().describe('Best guess of meal type based on foods and composition: breakfast, lunch, dinner, or snack'),
-  overallConfidence: z.number().min(0).max(100).describe('Overall confidence in the complete analysis'),
-  healthScore: z.number().min(0).max(10).describe('Health score 0-10 based on nutritional balance, variety, and quality'),
-  healthNotes: z.string().describe('Brief 1-2 sentence health insight about this meal, e.g., "High protein meal with good fiber. Consider adding more vegetables for micronutrients."'),
-  cuisineType: z.string().describe('Detected cuisine type if identifiable, e.g., "Italian", "Japanese", "American", "Mexican", or "Mixed/Unknown"'),
-});
-
-type FoodAnalysis = z.infer<typeof FoodAnalysisSchema>;
 
 const MEAL_TYPES: { value: MealType; label: string; icon: string; timeRange: string }[] = [
   { value: 'breakfast', label: 'Breakfast', icon: '🌅', timeRange: '5am-11am' },
@@ -77,13 +49,13 @@ const MEAL_TYPES: { value: MealType; label: string; icon: string; timeRange: str
 ];
 
 
-const ANALYSIS_PROMPT = `You are an expert nutritionist and food scientist with deep knowledge of the USDA FoodData Central database, international cuisines, and portion estimation.
+const ANALYSIS_PROMPT = `Estimate visible foods and nutrition from this photo. You have no database lookup tool. Do not claim to verify USDA records. Return estimates, identify uncertainty in portionNotes and healthNotes, and return an empty foods array when no food is visible.
 
 TASK: Analyze this food image with maximum accuracy and detail.
 
 CRITICAL RULES FOR ACCURATE ANALYSIS:
 1. PORTION ESTIMATION: Use visual reference cues (plate size ~10 inches, standard utensils, hand size, common dish sizes). Estimate weight in grams for each item.
-2. CALORIE ACCURACY: Cross-reference with USDA values. A chicken breast is ~165 cal/100g cooked, white rice is ~130 cal/100g cooked, etc.
+2. CALORIE ACCURACY: Use typical nutritional reference values as estimates. A chicken breast is ~165 cal/100g cooked, white rice is ~130 cal/100g cooked, etc.
 3. COOKING METHOD MATTERS: Fried foods have 50-100% more calories than grilled. Sauces and dressings add 50-200 cal per serving.
 4. HIDDEN CALORIES: Account for oils used in cooking (~120 cal/tablespoon), butter, dressings, sauces, cheese, and toppings that may not be immediately obvious.
 5. SPECIFIC IDENTIFICATION: Be as specific as possible. "Basmati rice" not "rice". "Pan-seared Atlantic salmon" not "fish". Include preparation method.
@@ -98,9 +70,9 @@ MACRO ACCURACY GUIDELINES:
 - Fiber: vegetables ~2-4g/100g, whole grains ~3-5g/100g, beans ~6-8g/100g, fruits ~2-3g/100g
 - Sugar: fruit ~10-15g/100g, soda ~11g/100ml, desserts vary widely
 
-For EACH food item detected, provide precise nutritional estimates based on the above guidelines.`;
+For EACH food item detected, provide approximate nutritional estimates based on the above guidelines.`;
 
-const CORRECTION_PROMPT_PREFIX = `You are an expert nutritionist re-analyzing a food image based on user corrections.
+const CORRECTION_PROMPT_PREFIX = `You are estimating nutrition again from a food image based on user corrections.
 
 PREVIOUS ANALYSIS WAS INCORRECT. The user has provided these corrections:`;
 
@@ -120,6 +92,9 @@ export default function FoodScannerScreen() {
 
   const [permission, requestPermission] = useCameraPermissions();
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const captureBusy = useRef(false);
+  const mounted = useRef(true);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<MealType>(getAutoMealType());
   const [showMealPicker, setShowMealPicker] = useState(false);
@@ -142,6 +117,10 @@ export default function FoodScannerScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; pulseAnim.stopAnimation(); };
+  }, [pulseAnim]);
 
   const startPulse = useCallback(() => {
     Animated.loop(
@@ -183,47 +162,22 @@ export default function FoodScannerScreen() {
     mutationFn: async ({ imageBase64, hint }: { imageBase64: string; hint?: string }) => {
       startPulse();
 
-      const stages = [
-        'Detecting food items...',
-        'Estimating portions...',
-        'Calculating macronutrients...',
-        'Cross-referencing USDA data...',
-        'Finalizing analysis...',
-      ];
-
-      let stageIndex = 0;
-      setAnalysisStage(stages[0]);
-      const stageInterval = setInterval(() => {
-        stageIndex = Math.min(stageIndex + 1, stages.length - 1);
-        setAnalysisStage(stages[stageIndex]);
-      }, 2200);
+      setAnalysisStage('Waiting for a food estimate. Review portions and nutrition before saving.');
 
       try {
         const prompt = hint
           ? `${CORRECTION_PROMPT_PREFIX}\n"${hint}"\n${CORRECTION_PROMPT_SUFFIX}`
           : ANALYSIS_PROMPT;
 
-        const result = await generateObject({
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                { type: 'image', image: imageBase64 },
-              ],
-            },
-          ],
-          schema: FoodAnalysisSchema,
-        });
+        const result = await requestFoodAnalysis(FoodAnalysisSchema, imageBase64, prompt);
         
-        clearInterval(stageInterval);
         return result;
-      } catch (error) {
-        clearInterval(stageInterval);
-        throw error;
+      } finally {
+        pulseAnim.stopAnimation();
       }
     },
     onSuccess: (data) => {
+      if (!mounted.current) return;
       setAnalysis(data);
       setEditedFoods(data.foods.map(f => ({
         ...f,
@@ -252,10 +206,11 @@ export default function FoodScannerScreen() {
       });
     },
     onError: (error) => {
+      if (!mounted.current) return;
       console.error('[FoodScanner] Analysis error:', error);
       Alert.alert(
         'Analysis Failed',
-        'Could not analyze the image. This might happen with unclear photos. Try taking a clearer picture with better lighting.',
+        error instanceof Error ? error.message : 'Food analysis failed. Retry or enter your meal manually.',
         [
           { text: 'Retry', onPress: resetScan },
           { text: 'Cancel', style: 'cancel' },
@@ -267,6 +222,7 @@ export default function FoodScannerScreen() {
 
   const saveMutation = useMutation({
     mutationFn: async (foods: FoodAnalysis['foods']) => {
+      FoodAnalysisSchema.shape.foods.parse(foods);
       const logs: FoodLog[] = foods.map((food) => ({
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         foodName: food.name,
@@ -323,12 +279,31 @@ export default function FoodScannerScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     },
+    onError: () => Alert.alert('Meal could not be saved', 'Check the food names, portions, and non-negative nutrition values, then retry.'),
   });
 
   const { mutate: analyzeImage } = analyzeMutation;
 
+  const submitPhoto = useCallback(async (uri: string, width: number, height: number) => {
+    const resize = Math.max(width, height) > 1600
+      ? [width >= height ? { resize: { width: 1600 } } : { resize: { height: 1600 } }]
+      : [];
+    const photo = await manipulateAsync(uri, resize, { compress: 0.75, format: SaveFormat.JPEG, base64: true });
+    if (!photo.base64) throw new Error('This photo could not be prepared for analysis. Choose another image.');
+    if (!mounted.current) return;
+    Alert.alert('Analyze this food photo?',
+      'Alchemize sends this photo to the Rork AI service to estimate foods, portions, calories, and nutrients. Estimates may be inaccurate. Review and edit them before saving. You can enter a meal manually instead.',
+      [{ text: 'Cancel', style: 'cancel' }, { text: 'Analyze Photo', onPress: () => {
+        if (!mounted.current) return;
+        setAnalysis(null);
+        setCapturedImage(`data:image/jpeg;base64,${photo.base64}`);
+        analyzeImage({ imageBase64: photo.base64! });
+      } }]);
+  }, [analyzeImage]);
+
   const takePicture = useCallback(async () => {
-    if (!cameraRef.current) return;
+    if (!cameraRef.current || !cameraReady || captureBusy.current || analyzeMutation.isPending) return;
+    captureBusy.current = true;
 
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -337,30 +312,39 @@ export default function FoodScannerScreen() {
         quality: 0.8,
       });
 
-      if (photo?.base64) {
-        setCapturedImage(`data:image/jpeg;base64,${photo.base64}`);
-        analyzeImage({ imageBase64: photo.base64 });
-      }
+      if (!photo) throw new Error('No photo was captured.');
+      await submitPhoto(photo.uri, photo.width, photo.height);
     } catch (error) {
       console.error('[FoodScanner] Camera error:', error);
       Alert.alert('Error', 'Failed to take picture. Please try again.');
+    } finally {
+      captureBusy.current = false;
     }
-  }, [analyzeImage]);
+  }, [submitPhoto, cameraReady, analyzeMutation.isPending]);
 
   const pickImage = useCallback(async () => {
+    if (captureBusy.current || analyzeMutation.isPending) return;
+    captureBusy.current = true;
+    try {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       base64: true,
       quality: 0.8,
     });
 
-    if (!result.canceled && result.assets[0]?.base64) {
-      setCapturedImage(`data:image/jpeg;base64,${result.assets[0].base64}`);
-      analyzeImage({ imageBase64: result.assets[0].base64 });
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      await submitPhoto(asset.uri, asset.width, asset.height);
     }
-  }, [analyzeImage]);
+    } catch (error) {
+      Alert.alert('Photo could not be opened', error instanceof Error ? error.message : 'Choose another food photo.');
+    } finally {
+      captureBusy.current = false;
+    }
+  }, [submitPhoto, analyzeMutation.isPending]);
 
   const resetScan = useCallback(() => {
+    setCameraReady(false);
     setCapturedImage(null);
     setAnalysis(null);
     setEditedFoods([]);
@@ -399,9 +383,9 @@ export default function FoodScannerScreen() {
   const { mutate: saveFood } = saveMutation;
 
   const handleSave = useCallback(() => {
-    if (editedFoods.length === 0) return;
+    if (editedFoods.length === 0 || saveMutation.isPending) return;
     saveFood(editedFoods);
-  }, [editedFoods, saveFood]);
+  }, [editedFoods, saveFood, saveMutation.isPending]);
 
   const handleBarcodeScanned = useCallback(({ data }: { data: string }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -412,8 +396,8 @@ export default function FoodScannerScreen() {
     mutationFn: async () => {
       if (!barcodeData || !barcodeFoodName.trim() || !barcodeCalories.trim()) return;
 
-      const calories = parseFloat(barcodeCalories);
-      if (isNaN(calories)) return;
+      const calories = parseOptionalNumber(barcodeCalories);
+      if (calories === null) throw new Error('Enter non-negative calories from the product label.');
 
       const log: FoodLog = {
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
@@ -486,14 +470,18 @@ export default function FoodScannerScreen() {
       Alert.alert('Error', 'Please enter a food name');
       return;
     }
-    if (!barcodeCalories.trim() || isNaN(parseFloat(barcodeCalories))) {
+    if (!barcodeCalories.trim() || parseOptionalNumber(barcodeCalories) === null) {
       Alert.alert('Error', 'Please enter valid calories');
       return;
     }
+    if ([barcodeProtein, barcodeCarbs, barcodeFat, barcodeFiber].some(value => value.trim() && parseOptionalNumber(value) === null)) {
+      Alert.alert('Check nutrition values', 'Enter non-negative numbers for calories and nutrients.');
+      return;
+    }
     barcodeSaveMutation.mutate();
-  }, [barcodeFoodName, barcodeCalories, barcodeSaveMutation]);
+  }, [barcodeFoodName, barcodeCalories, barcodeProtein, barcodeCarbs, barcodeFat, barcodeFiber, barcodeSaveMutation]);
 
-  if (!permission) {
+  if (!permission && !capturedImage) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#22c55e" />
@@ -501,7 +489,7 @@ export default function FoodScannerScreen() {
     );
   }
 
-  if (!permission.granted) {
+  if (!permission?.granted && !(capturedImage && (analysis || analyzeMutation.isPending))) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <LinearGradient
@@ -514,10 +502,10 @@ export default function FoodScannerScreen() {
           </View>
           <Text style={styles.permissionTitle}>Camera Access</Text>
           <Text style={styles.permissionText}>
-            Allow camera access to scan your food and automatically track calories with AI-powered nutritional analysis
+            Photograph meals or scan barcodes in Alchemize. AI nutrition values are estimates that you review before saving.
           </Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-            <Text style={styles.permissionButtonText}>Enable Camera</Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={() => permission?.canAskAgain === false ? Linking.openSettings() : requestPermission()}>
+            <Text style={styles.permissionButtonText}>{permission?.canAskAgain === false ? 'Open Settings' : 'Enable Camera'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.galleryButton} onPress={pickImage}>
             <ImageIcon size={20} color="#6366f1" />
@@ -692,7 +680,7 @@ export default function FoodScannerScreen() {
         />
 
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity onPress={resetScan} style={styles.headerBtn} testID="reset-scan">
+          <TouchableOpacity onPress={resetScan} disabled={analyzeMutation.isPending} style={styles.headerBtn} testID="reset-scan">
             <RotateCcw size={22} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
@@ -736,36 +724,8 @@ export default function FoodScannerScreen() {
                   <Brain size={32} color="#22c55e" />
                 </View>
               </Animated.View>
-              <Text style={styles.analyzingTitle}>AI Nutritionist Analyzing...</Text>
+              <Text style={styles.analyzingTitle}>Estimating Your Meal...</Text>
               <Text style={styles.analyzingSubtitle}>{analysisStage}</Text>
-              <View style={styles.analysisSteps}>
-                {['Detecting', 'Portions', 'Macros', 'USDA', 'Done'].map((step, i) => {
-                  const stageNames = [
-                    'Detecting food items...',
-                    'Estimating portions...',
-                    'Calculating macronutrients...',
-                    'Cross-referencing USDA data...',
-                    'Finalizing analysis...',
-                  ];
-                  const isActive = analysisStage === stageNames[i];
-                  const isPast = stageNames.indexOf(analysisStage) > i;
-                  return (
-                    <View key={step} style={styles.analysisStepItem}>
-                      <View style={[
-                        styles.analysisStepDot,
-                        isPast && styles.analysisStepDotDone,
-                        isActive && styles.analysisStepDotActive,
-                      ]}>
-                        {isPast && <Check size={8} color="#fff" />}
-                      </View>
-                      <Text style={[
-                        styles.analysisStepText,
-                        (isActive || isPast) && styles.analysisStepTextActive,
-                      ]}>{step}</Text>
-                    </View>
-                  );
-                })}
-              </View>
             </View>
           ) : analysis ? (
             <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -1136,6 +1096,8 @@ export default function FoodScannerScreen() {
     <View style={styles.container}>
       <CameraView
         ref={cameraRef}
+        onCameraReady={() => setCameraReady(true)}
+        onMountError={() => { setCameraReady(false); Alert.alert('Camera unavailable', 'Choose a food photo from your gallery or enter your meal manually.'); }}
         style={styles.camera}
         facing="back"
         barcodeScannerSettings={scanMode === 'barcode' ? {
@@ -1206,7 +1168,7 @@ export default function FoodScannerScreen() {
           </TouchableOpacity>
 
           {scanMode === 'photo' ? (
-            <TouchableOpacity style={styles.captureButton} onPress={takePicture} activeOpacity={0.85} testID="capture-btn">
+            <TouchableOpacity style={styles.captureButton} onPress={takePicture} disabled={!cameraReady || analyzeMutation.isPending} activeOpacity={0.85} testID="capture-btn">
               <View style={styles.captureButtonOuter}>
                 <View style={styles.captureButtonInner}>
                   <Camera size={28} color="#0a0a0f" />

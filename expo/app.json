@@ -18,9 +18,8 @@
       "bundleIdentifier": "app.repo.alchemize-level-up",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos",
-        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera",
-        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone"
+        "NSPhotoLibraryUsageDescription": "Alchemize lets you choose photos for food nutrition estimates, your profile, and your manifestation board.",
+        "NSCameraUsageDescription": "Alchemize uses your camera to photograph meals for nutrition estimates, scan food barcodes, take a profile photo, and add photos to your manifestation board."
       }
     },
     "android": {
@@ -86,7 +85,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with your friends."
+          "photosPermission": "Alchemize lets you choose photos for food nutrition estimates, your profile, and your manifestation board.",
+          "cameraPermission": "Alchemize uses your camera to photograph meals for nutrition estimates, scan food barcodes, take a profile photo, and add photos to your manifestation board.",
+          "microphonePermission": false
         }
       ],
       [
@@ -101,8 +102,9 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
-          "recordAudioAndroid": false
+          "cameraPermission": "Alchemize uses your camera to photograph meals for nutrition estimates, scan food barcodes, take a profile photo, and add photos to your manifestation board.",
+          "recordAudioAndroid": false,
+          "microphonePermission": false
         }
       ],
       "expo-secure-store",
@@ -117,7 +119,8 @@
         "@kingstinct/react-native-healthkit",
         {
           "NSHealthShareUsageDescription": "Alchemize reads your Apple Health data (workouts, active energy, exercise minutes) to keep your fitness stats in sync.",
-          "NSHealthUpdateUsageDescription": "Alchemize does not write any data to Apple Health."
+          "NSHealthUpdateUsageDescription": "Alchemize connects to Apple Health to sync your fitness stats. This version reads workouts, active energy, and exercise minutes and does not save or modify Apple Health data.",
+          "background": false
         }
       ]
     ],

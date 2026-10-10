@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, useRootNavigationState, useSegments } from "expo-router";
+import { Stack, useRouter, useRootNavigationState, useSegments, type ErrorBoundaryProps } from "expo-router";
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, Platform, View, Image } from 'react-native';
+import { StyleSheet, Text, Platform, View, Image, ActivityIndicator } from 'react-native';
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -9,21 +9,17 @@ import { ChevronLeft } from "lucide-react-native";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { AuthProvider, useAuth } from "@/contexts/auth-context";
-import { SubscriptionProvider, useSubscription } from "@/contexts/subscription-context";
 import NetworkBanner from "@/components/NetworkBanner";
 import GestureOnboarding from "@/components/GestureOnboarding";
 import { applyWebPolish } from "@/lib/web-polish";
 import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
-import { isGatedFeature } from "@/constants/features";
+import { createSplashHider, withTimeout } from "@/lib/startup";
 
 console.info('[Startup] JS_STARTED');
 
-// Keep the native splash visible until the root React tree is mounted. Calling
-// this at module load is important: calling it from an effect can lose the
-// race with Expo's automatic first-frame hide on cold native launches.
-void SplashScreen.preventAutoHideAsync().catch((error) => {
-  console.warn('[Startup] Could not prevent native splash auto-hide:', error);
-});
+// Use Expo's automatic first-content dismissal. A manual preventAutoHide latch
+// can strand the native splash if module evaluation or React mount fails.
+const hideNativeSplash = createSplashHider(() => SplashScreen.hideAsync());
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -82,43 +78,20 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, isLoading, segments, navState?.key, router]);
 
-  if (isLoading) {
-    return (
-      <View style={layoutStyles.splash}>
-        <Image
-          source={require('../assets/images/splash-icon.png')}
-          style={layoutStyles.splashImage}
-          resizeMode="contain"
-        />
-      </View>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-function PaywallGate({ children }: { children: React.ReactNode }) {
-  const { isPro, isLoading: subLoading } = useSubscription();
-  const router = useRouter();
-  const segments = useSegments();
-  const navState = useRootNavigationState();
-
-  const topSegment = segments[0] as string | undefined;
-  const isGatedRoute = !!topSegment && isGatedFeature(topSegment);
-
-  useEffect(() => {
-    if (subLoading) return;
-    if (!navState?.key) return;
-    if (isGatedRoute && !isPro) {
-      router.replace('/paywall');
-    }
-  }, [isGatedRoute, isPro, subLoading, navState?.key, router]);
-
-  if (isGatedRoute && (subLoading || !isPro)) {
-    return <View style={layoutStyles.splash} />;
-  }
-
-  return <>{children}</>;
+  const inAuth = segments[0] === 'auth';
+  const showLoading = isLoading || (!isAuthenticated && !inAuth);
+  return (
+    <>
+      {children}
+      {showLoading && (
+        <View style={[StyleSheet.absoluteFill, layoutStyles.splash]} testID="startup-loading">
+          <Image source={require('../assets/images/splash-icon.png')} style={layoutStyles.splashImage} resizeMode="contain" />
+          <ActivityIndicator color="#ffffff" accessibilityLabel="Opening Alchemize" />
+          <Text style={layoutStyles.startupText}>Opening Alchemize...</Text>
+        </View>
+      )}
+    </>
+  );
 }
 
 function RootLayoutNav() {
@@ -139,7 +112,6 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="auth" options={{ title: "Welcome", headerShown: false }} />
-      <Stack.Screen name="paywall" options={{ title: "Alchemize Pro", headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="index" options={{ title: "Alchemize", headerShown: false }} />
       <Stack.Screen name="manifestation-board/index" options={{ title: "Portal Board", headerShown: true }} />
       <Stack.Screen name="manifestation-board/[id]" options={{ title: "Manifestation Detail", headerStyle: { backgroundColor: '#0c0520' }, headerTintColor: '#ffffff' }} />
@@ -180,31 +152,22 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  useFonts({ SpaceMono_400Regular });
+  const [fontsLoaded, fontError] = useFonts({ SpaceMono_400Regular });
+  useEffect(() => {
+    if (fontError) console.warn('[Startup] FONT_LOAD_FAILED', fontError.message);
+    else if (fontsLoaded) console.info('[Startup] FONTS_READY');
+  }, [fontsLoaded, fontError]);
 
   useEffect(() => {
     console.info('[Startup] ROOT_MOUNTED');
 
-    let cancelled = false;
-    const fallback = setTimeout(() => {
-      if (cancelled) return;
-      console.warn('[Startup] Native splash fallback release');
-      void SplashScreen.hideAsync().catch((error) => {
-        console.error('[Startup] Native splash fallback hide failed:', error);
-      });
-    }, 3000);
-
     // Release the native splash immediately after the root view exists. The
     // AuthGate's React loading view remains visible while auth initializes, so
     // a slow storage/SDK call can no longer leave the OS splash on screen.
-    void SplashScreen.hideAsync()
-      .then(() => console.info('[Startup] NATIVE_SPLASH_HIDDEN root-mount'))
-      .catch((error) => console.error('[Startup] Native splash hide failed:', error));
-
-    return () => {
-      cancelled = true;
-      clearTimeout(fallback);
-    };
+    // Retry on layout because the native API can resolve before its view is ready.
+    void hideNativeSplash('root-mount');
+    const retry = setTimeout(() => { void hideNativeSplash('root-mount-retry'); }, 2000);
+    return () => clearTimeout(retry);
   }, []);
 
   useEffect(() => {
@@ -212,15 +175,15 @@ export default function RootLayout() {
     if (Platform.OS !== 'web') {
       console.log('[App] Initializing database...');
       import('@/lib/db/core')
-        .then(({ initDatabase }) => initDatabase())
+        .then(({ initDatabase }) => withTimeout(initDatabase(), 10000, 'database'))
         .then(() => console.log('[App] Database ready'))
         .catch((err) => console.error('[App] Database init failed:', err));
 
       console.log('[App] Registering for push notifications...');
       import('@/lib/notifications')
-        .then(({ registerForPushNotifications }) => registerForPushNotifications())
+        .then(({ registerForPushNotifications }) => withTimeout(registerForPushNotifications(), 15000, 'pushRegistration'))
         .then((token) => {
-          if (token) console.log('[App] Push token registered:', token);
+          if (token) console.info('[Startup] PUSH_REGISTERED');
           else console.log('[App] Push notification registration skipped or failed');
         })
         .catch((err) => console.error('[App] Push registration error:', err));
@@ -231,24 +194,35 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <AuthProvider>
-          <SubscriptionProvider>
-            <ThemeProvider>
-              <GestureHandlerRootView style={layoutStyles.root}>
-                <View style={layoutStyles.root}>
-                  <AuthGate>
-                    <PaywallGate>
-                      <RootLayoutNav />
-                    </PaywallGate>
-                  </AuthGate>
-                  <NetworkBanner />
-                  <GestureOnboardingGate />
-                </View>
-              </GestureHandlerRootView>
-            </ThemeProvider>
-          </SubscriptionProvider>
+          <ThemeProvider>
+            <GestureHandlerRootView style={layoutStyles.root}>
+              <View style={layoutStyles.root} onLayout={() => { console.info('[Startup] ROOT_LAYOUT'); void hideNativeSplash('root-layout'); }}>
+                <AuthGate>
+                  <RootLayoutNav />
+                </AuthGate>
+                <NetworkBanner />
+                <GestureOnboardingGate />
+              </View>
+            </GestureHandlerRootView>
+          </ThemeProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </QueryClientProvider>
+  );
+}
+
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    console.error('[Startup] ROUTE_RENDER_FAILED', error.name, error.message);
+    void hideNativeSplash('error-boundary');
+  }, [error]);
+  return (
+    <View style={layoutStyles.splash} onLayout={() => { void hideNativeSplash('error-layout'); }} testID="startup-error">
+      <Text style={layoutStyles.startupText}>Alchemize could not open this screen.</Text>
+      <TouchableOpacity onPress={() => { void retry(); }} accessibilityRole="button">
+        <Text style={layoutStyles.startupText}>Try again</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -274,6 +248,7 @@ const layoutStyles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#0c0520',
   },
+  startupText: { color: '#ffffff', fontSize: 16, padding: 16, textAlign: 'center' },
   splashImage: {
     width: 200,
     height: 200,

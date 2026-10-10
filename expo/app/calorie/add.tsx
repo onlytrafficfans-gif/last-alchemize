@@ -1,3 +1,4 @@
+import { parseOptionalNumber } from '@/services/calorieAnalysisService';
 import { invalidateFoodLogs } from '../../services/queryInvalidationService';
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, TextInput, Text, ScrollView, Alert, Platform, KeyboardAvoidingView, ActivityIndicator } from 'react-native';
@@ -15,7 +16,7 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react-native';
-import { generateObject } from '@rork-ai/toolkit-sdk';
+import { requestAiObject } from '@/services/foodScanClient';
 import { z } from 'zod';
 import { foodLogsDb } from '@/lib/db/food';
 import { appointmentsDb } from '@/lib/db/appointments';
@@ -42,23 +43,23 @@ const QUICK_FOODS = [
 ];
 
 const FoodSearchResultSchema = z.object({
-  name: z.string().describe('Clean, specific name of the food, using standard capitalization'),
+  name: z.string().trim().min(1).describe('Clean, specific name of the food, using standard capitalization'),
   servingDescription: z.string().describe('One standard serving size with weight, e.g. "1 medium (118g)" or "1 cup cooked (185g)"'),
-  calories: z.number().describe('Estimated calories for one standard serving, based on USDA FoodData Central reference values'),
-  protein: z.number().describe('Estimated protein in grams for that serving'),
-  carbs: z.number().describe('Estimated total carbohydrates in grams for that serving'),
-  fat: z.number().describe('Estimated total fat in grams for that serving'),
-  fiber: z.number().describe('Estimated dietary fiber in grams for that serving'),
+  calories: z.number().finite().nonnegative().describe('Estimated calories for one standard serving, based on USDA FoodData Central reference values'),
+  protein: z.number().finite().nonnegative().describe('Estimated protein in grams for that serving'),
+  carbs: z.number().finite().nonnegative().describe('Estimated total carbohydrates in grams for that serving'),
+  fat: z.number().finite().nonnegative().describe('Estimated total fat in grams for that serving'),
+  fiber: z.number().finite().nonnegative().describe('Estimated dietary fiber in grams for that serving'),
 });
 
 type FoodSearchResult = z.infer<typeof FoodSearchResultSchema>;
 
 function buildFoodSearchPrompt(query: string): string {
-  return `You are a nutrition database assistant with deep knowledge of the USDA FoodData Central database.
+  return `Estimate nutrition using general food knowledge. You have no database lookup tool; do not claim a verified database result.
 
 The user wants to log this food: "${query}"
 
-Return your best estimate of nutrition facts for ONE standard serving of this food. If the query names a dish or brand, pick the most common home or restaurant preparation. Use realistic values consistent with USDA reference data (e.g. chicken breast ~165 cal/100g cooked, white rice ~130 cal/100g cooked). If the query is too vague to identify a food at all, still return your best single-item guess rather than refusing.`;
+Return your best estimate of nutrition facts for ONE standard serving of this food. If the query names a dish or brand, pick the most common home or restaurant preparation. Use realistic values consistent with USDA reference data (e.g. chicken breast ~165 cal/100g cooked, white rice ~130 cal/100g cooked). If the query cannot identify a food, return an empty name rather than inventing a meal.`;
 }
 
 export default function AddMealScreen() {
@@ -102,17 +103,15 @@ export default function AddMealScreen() {
 
   const aiSearchMutation = useMutation({
     mutationFn: async (query: string) => {
-      return generateObject({
-        messages: [{ role: 'user', content: buildFoodSearchPrompt(query) }],
-        schema: FoodSearchResultSchema,
-      });
+      return requestAiObject(FoodSearchResultSchema,
+        [{ role: 'user', content: buildFoodSearchPrompt(query) }], 'Food search');
     },
     onSuccess: (result) => {
       setAiResult(result);
     },
     onError: (error: any) => {
       console.error('[AddFood] AI food search failed:', error);
-      Alert.alert('Search failed', 'Could not look up that food. Please try again or enter it manually.');
+      Alert.alert('Search failed', error instanceof Error ? error.message : 'Food search failed. Enter your meal manually or retry.');
     },
   });
 
@@ -242,8 +241,13 @@ export default function AddMealScreen() {
       Alert.alert('Error', 'Please enter a food name');
       return;
     }
-    if (!calories.trim() || isNaN(parseFloat(calories))) {
+    if (!calories.trim() || parseOptionalNumber(calories) === null) {
       Alert.alert('Error', 'Please enter valid calories');
+      return;
+    }
+
+    if ([protein, carbs, fat, fiber].some(value => value.trim() && parseOptionalNumber(value) === null)) {
+      Alert.alert('Check nutrition values', 'Enter non-negative numbers for calories and nutrients.');
       return;
     }
 
@@ -252,11 +256,11 @@ export default function AddMealScreen() {
         ...existingLog,
         foodName: name.trim(),
         servingDescription: servingSize.trim() || '1 serving',
-        calories: parseFloat(calories),
-        proteinGrams: protein ? parseFloat(protein) : null,
-        carbGrams: carbs ? parseFloat(carbs) : null,
-        fatGrams: fat ? parseFloat(fat) : null,
-        fiberGrams: fiber ? parseFloat(fiber) : null,
+        calories: parseOptionalNumber(calories)!,
+        proteinGrams: protein ? parseOptionalNumber(protein) : null,
+        carbGrams: carbs ? parseOptionalNumber(carbs) : null,
+        fatGrams: fat ? parseOptionalNumber(fat) : null,
+        fiberGrams: fiber ? parseOptionalNumber(fiber) : null,
         mealType,
       };
       updateFood(updated);
@@ -267,12 +271,12 @@ export default function AddMealScreen() {
       id: Date.now().toString(),
       foodName: name.trim(),
       servingDescription: servingSize.trim() || '1 serving',
-      calories: parseFloat(calories),
-      proteinGrams: protein ? parseFloat(protein) : null,
-      carbGrams: carbs ? parseFloat(carbs) : null,
-      fatGrams: fat ? parseFloat(fat) : null,
+      calories: parseOptionalNumber(calories)!,
+      proteinGrams: protein ? parseOptionalNumber(protein) : null,
+      carbGrams: carbs ? parseOptionalNumber(carbs) : null,
+      fatGrams: fat ? parseOptionalNumber(fat) : null,
       sugarGrams: null,
-      fiberGrams: fiber ? parseFloat(fiber) : null,
+      fiberGrams: fiber ? parseOptionalNumber(fiber) : null,
       mealType,
       sourceType: 'manual',
       loggedAt: Date.now(),

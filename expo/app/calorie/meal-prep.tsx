@@ -1,3 +1,4 @@
+import { parseOptionalNumber } from '@/services/calorieAnalysisService';
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Text, TextInput, Modal, Platform, Alert, KeyboardAvoidingView } from 'react-native';
 import { TouchableOpacity } from '@/components/HapticTouchable';
@@ -196,8 +197,12 @@ export default function MealPrepScreen() {
       Alert.alert('Error', 'Please enter a food name');
       return;
     }
-    if (!calories || isNaN(parseFloat(calories))) {
+    if (!calories || parseOptionalNumber(calories) === null) {
       Alert.alert('Error', 'Please enter valid calories');
+      return;
+    }
+    if ([protein, carbs, fat].some(value => value.trim() && parseOptionalNumber(value) === null)) {
+      Alert.alert('Check nutrition values', 'Enter non-negative numbers for calories and nutrients.');
       return;
     }
 
@@ -207,10 +212,10 @@ export default function MealPrepScreen() {
       dayOfWeek: selectedDay,
       mealType: selectedMealType,
       foodName: foodName.trim(),
-      calories: parseFloat(calories),
-      protein: protein ? parseFloat(protein) : null,
-      carbs: carbs ? parseFloat(carbs) : null,
-      fat: fat ? parseFloat(fat) : null,
+      calories: parseOptionalNumber(calories)!,
+      protein: protein ? parseOptionalNumber(protein) : null,
+      carbs: carbs ? parseOptionalNumber(carbs) : null,
+      fat: fat ? parseOptionalNumber(fat) : null,
       servingSize: servingSize.trim(),
       notes: notes.trim(),
       isCompleted: editingMeal?.isCompleted || false,

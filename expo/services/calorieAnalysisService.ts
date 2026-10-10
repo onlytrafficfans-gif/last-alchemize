@@ -44,6 +44,6 @@ export function calculateFoodTotals(foods: AnalyzedFoodTotalsInput[]) {
 
 export function parseOptionalNumber(value: string): number | null {
   if (!value.trim()) return null;
-  const parsed = parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
