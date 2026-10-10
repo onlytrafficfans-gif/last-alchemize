@@ -8,7 +8,7 @@
  * 4. Return a short-lived signed URL and metadata
  */
 import { Image } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { decode as base64Decode } from 'base64-arraybuffer';

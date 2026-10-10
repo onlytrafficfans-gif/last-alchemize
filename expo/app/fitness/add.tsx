@@ -5,14 +5,15 @@ import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sparkles, Zap, ChevronLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { generateObject } from '@rork-ai/toolkit-sdk';
+import { requestAiObject } from '@/services/foodScanClient';
+import { localDateKey } from '@/lib/date-utils';
 import { z } from 'zod';
 import { workoutTemplatesDb, workoutSessionsDb, normalizedMetricsDb } from '@/lib/db/fitness';
 import { estimateCalories } from '@/lib/fitness';
 import type { WorkoutSession, WorkoutTemplate } from '@/types';
 
 const CalorieEstimateSchema = z.object({
-  estimatedCalories: z.number().describe('Estimated calories burned during the workout'),
+  estimatedCalories: z.number().finite().nonnegative().describe('Estimated calories burned during the workout'),
   confidence: z.enum(['low', 'medium', 'high']).describe('Confidence level of the estimate'),
   explanation: z.string().describe('Brief explanation of the estimate'),
 });
@@ -87,15 +88,15 @@ export default function AddWorkoutScreen() {
 
       await workoutSessionsDb.create(session);
 
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = localDateKey(new Date());
       const existingMetric = await normalizedMetricsDb.getByDate(dateStr);
       if (existingMetric) {
         await normalizedMetricsDb.upsert({
           id: existingMetric.id,
           date: dateStr,
-          activeMinutes: (existingMetric.activeMinutes || 0) + durationNum,
-          caloriesActive: (existingMetric.caloriesActive || 0) + calories,
-          steps: existingMetric.steps || 0,
+          activeMinutes: durationNum,
+          caloriesActive: calories,
+          steps: 0,
           source: 'workout',
           deviceType: 'none',
         });
@@ -131,8 +132,7 @@ export default function AddWorkoutScreen() {
     mutationFn: async () => {
       if (!workoutDescription.trim() || !duration) return null;
       
-      const result = await generateObject({
-        messages: [
+      const result = await requestAiObject(CalorieEstimateSchema, [
           {
             role: 'user',
             content: `Estimate calories burned for this workout:
@@ -143,9 +143,7 @@ Description: ${workoutDescription}
 
 Provide an estimated calorie burn based on this information. Consider typical metabolic rates and exercise intensity. If the description mentions specific exercises, use those to refine the estimate.`,
           },
-        ],
-        schema: CalorieEstimateSchema,
-      });
+        ], 'Workout calorie estimate');
       return result;
     },
     onSuccess: (data) => {
@@ -158,7 +156,7 @@ Provide an estimated calorie burn based on this information. Consider typical me
     },
     onError: (error) => {
       console.error('AI estimation error:', error);
-      Alert.alert('Estimation Failed', 'Could not estimate calories. Please try again or enter manually.');
+      Alert.alert('Estimation Failed', error instanceof Error ? error.message : 'Workout calorie estimation failed. Enter calories manually or retry.');
     },
   });
 

@@ -384,7 +384,7 @@ export default function SettingsScreen() {
       if (permissions.overallStatus === 'authorized') {
         Alert.alert(
           'Apple Health Connected',
-          'Your wearable data will now enhance your tracking. You stay in control of all entries.'
+          'Apple Health setup is complete. Only data you chose to share can be read. Review access in iOS Settings > Health > Data Access & Devices.'
         );
       } else if (permissions.overallStatus === 'unavailable') {
         const { reason } = isHealthKitSupported();
@@ -1544,7 +1544,7 @@ export default function SettingsScreen() {
                         <Text style={styles.healthKitStatusLabel}>Active Energy</Text>
                       </View>
                       <View style={[styles.healthKitStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                        <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Enabled</Text>
+                        <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Requested</Text>
                       </View>
                     </View>
                     <View style={styles.healthKitStatusRow}>
@@ -1553,7 +1553,7 @@ export default function SettingsScreen() {
                         <Text style={styles.healthKitStatusLabel}>Workouts</Text>
                       </View>
                       <View style={[styles.healthKitStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                        <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Enabled</Text>
+                        <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Requested</Text>
                       </View>
                     </View>
                     <View style={styles.healthKitStatusRow}>
@@ -1562,7 +1562,7 @@ export default function SettingsScreen() {
                         <Text style={styles.healthKitStatusLabel}>Exercise Minutes</Text>
                       </View>
                       <View style={[styles.healthKitStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                        <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Enabled</Text>
+                        <Text style={[styles.healthKitStatusValue, { color: '#22c55e' }]}>Requested</Text>
                       </View>
                     </View>
                   </View>
