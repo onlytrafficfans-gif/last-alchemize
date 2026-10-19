@@ -1,5 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert, Dimensions, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Modal,
+  Animated,
+  Easing,
+} from 'react-native';
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'expo-image';
@@ -7,11 +21,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'expo-router';
-import { Mail, Lock, User, Eye, EyeOff, Globe, ChevronRight, ShieldAlert, Check } from 'lucide-react-native';
+import {
+  Mail,
+  Lock,
+  User,
+  Eye,
+  EyeOff,
+  Globe,
+  ChevronRight,
+  ShieldAlert,
+  Check,
+  Sparkles,
+} from 'lucide-react-native';
 
 const TERMS_ACCEPTED_KEY = '@alchemize/terms_accepted_v1';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const CRYSTAL_BALL_IMAGE = 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/89z8qu274hk8f1cht7vcg.png';
 
 const TRANSLATIONS = {
@@ -29,6 +54,8 @@ const TRANSLATIONS = {
     signInWithApple: 'Apple',
     fillFields: 'Please fill in all fields',
     enterName: 'Please enter your name',
+    invalidEmail: 'Please enter a valid email address',
+    weakPassword: 'Password must be at least 6 characters',
     resetTitle: 'Reset Password',
     resetMessage: 'Enter your email to receive reset instructions',
     resetEmail: 'Email address',
@@ -60,6 +87,8 @@ const TRANSLATIONS = {
     signInWithApple: 'Apple',
     fillFields: 'Por favor completa todos los campos',
     enterName: 'Por favor ingresa tu nombre',
+    invalidEmail: 'Por favor ingresa un correo válido',
+    weakPassword: 'La contraseña debe tener al menos 6 caracteres',
     resetTitle: 'Restablecer Contraseña',
     resetMessage: 'Ingresa tu correo para recibir instrucciones',
     resetEmail: 'Correo electrónico',
@@ -73,11 +102,29 @@ const TRANSLATIONS = {
     termsTitle: 'Acuerdo de Términos y Privacidad',
     termsIntro: 'Por favor lee con atención antes de usar Alchemize.',
     termsBody:
-      'Al usar Alchemize aceptas lo siguiente:\n\n1. Uso Bajo Tu Propio Riesgo. Esta aplicación se proporciona "tal cual" sin garantías de ningún tipo. El contenido (afirmaciones, fitness, nutrición, datos financieros y de bienestar) es solo para fines informativos personales y no constituye asesoramiento médico, legal o financiero profesional. Alchemize no es un dispositivo médico, no ha sido evaluado por la FDA ni ningún regulador, y nunca debe usarse para diagnóstico, tratamiento o emergencias médicas — llama a tu médico o a servicios de emergencia para eso.\n\n2. Contenido Generado por IA. Alchemize usa inteligencia artificial (incluidos proveedores externos de IA) para analizar las fotos y textos que envías y para generar estimaciones, sugerencias y contenido (por ejemplo: reconocimiento de comida/nutrición a partir de fotos, sugerencias de entrenamiento, texto generado). El resultado de la IA puede ser inexacto, incompleto o engañoso. Eres responsable de verificar de forma independiente cualquier contenido generado por IA antes de confiar en él, especialmente cifras de calorías, nutrición, fitness o finanzas. No somos responsables por decisiones tomadas con base en contenido generado por IA.\n\n3. Datos y Privacidad. Almacenamos los datos que creas (metas, hábitos, fotos, diarios, métricas de salud) para operar la app. El contenido y las fotos que envías para funciones de IA pueden enviarse a proveedores externos de IA para su procesamiento, como se describe en nuestra Política de Privacidad. Si conectas Apple Health, los datos de HealthKit se usan solo para funciones dentro de la app (como sincronizar entrenamientos y actividad) — no los vendemos ni los usamos para publicidad. Usamos prácticas estándar de la industria pero ningún sistema es 100% seguro.\n\n4. Sin Responsabilidad por Filtraciones de Datos. En la máxima medida permitida por la ley, Alchemize, sus desarrolladores y afiliados NO son responsables por filtraciones de datos, brechas, pérdidas, acceso no autorizado o daños derivados del uso de la app o servicios de terceros (incluidos Apple, Google, Supabase, RevenueCat y nuestros proveedores de IA).\n\n5. Suscripciones. Los planes de pago, cuando se ofrecen, se facturan a través de App Store o Google Play y se renuevan automáticamente hasta que se cancelen. Puedes gestionar o cancelar tu suscripción en cualquier momento desde la configuración de tu cuenta de App Store o Google Play; los reembolsos los gestionan Apple/Google según sus políticas.\n\n6. Edad Mínima. Alchemize no está destinado a menores de 13 años (o la edad mínima requerida en tu país). No uses esta app si no cumples este requisito.\n\n7. Tu Responsabilidad. Eres responsable de mantener seguras tus credenciales y del contenido que subes. No compartas información médica, legal o financiera sensible que no quieras almacenada o procesada por IA.\n\n8. Cambios. Podemos actualizar estos Términos ocasionalmente; el uso continuado después de los cambios implica que los aceptas.\n\n9. Consentimiento. Al tocar "Acepto" confirmas que has leído, comprendido y aceptado estos términos y nuestra Política de Privacidad.\n\n—\n\nDesarrollado por Alchemize\nPotenciado y Diseñado por Metallicv1',
+      'Al usar Alchemize aceptas lo siguiente:\n\n1. Uso Bajo Tu Propio Riesgo. Esta aplicación se proporciona "tal cual" sin garantías de ningún tipo. El contenido (afirmaciones, fitness, nutrición, datos financieros y de bienestar) es solo para fines informativos personales y no constituye asesoramiento médico, legal o financiero profesional. Alchemize no es un dispositivo médico, no ha sido evaluado por la FDA ni ningún regulador, y nunca debe usarse para diagnóstico, tratamiento o emergencias médicas — llama a tu médico o a servicios de emergencia para eso.\n\n2. Contenido Generado por IA. Alchemize usa inteligencia artificial (incluidos proveedores externos de IA) para analizar las fotos y textos que envías y para generar estimaciones, sugerencias y contenido (por ejemplo: reconocimiento de comida/nutrición a partir de fotos, sugerencias de entrenamiento, texto generado). El resultado de la IA puede ser inexacto, incompleto o engañoso. Eres responsable de verificar de forma independiente cualquier contenido generado por IA antes de confiar en él, especialmente cifras de calorías, nutrición, fitness o finanzas. No somos responsables por decisiones tomadas con base en contenido generado por IA.\n\n3. Datos y Privacidad. Almacenamos los datos que creas (metas, hábitos, fotos, diarios, métricas de salud) para operar la app. El contenido y las fotos que envías para funciones de IA pueden enviarse a proveedores externos de IA para su procesamiento, como se describe en nuestra Política de Privacidad. Si conectas Apple Health, los datos de HealthKit se usan solo para funciones dentro de la app (como sincronizar entrenamientos y actividad) — no los vendemos ni los usamos para publicidad. Usamos prácticas estándar de la industria pero ningún sistema es 100% seguro.\n\n4. Sin Responsabilidad por Filtraciones de Datos. En la máxima medida permitida por la ley, Alchemize, sus desarrolladores y afiliados NO son responsables por filtraciones de datos, brechas, pérdidas, acceso no autorizado o daños derivados del uso de la app o servicios de terceros (incluidos Apple, Google, Supabase, RevenueCat y nuestros proveedores de IA).\n\n5. Suscripciones. Los planes de pago, cuando se ofrecen, se facturan a través de App Store o Google Play y se renuevan automáticamente hasta que se cancelen. Puedes gestionar o cancelar tu suscripción en cualquier momento desde la configuración de tu cuenta de App Store o Google Play; los reembolsos los gestionan Apple/Google según sus políticas.\n\n6. Edad Mínima. Alchemize no está destinado para menores de 13 años (o la edad mínima requerida en tu país). No uses esta app si no cumples este requisito.\n\n7. Tu Responsabilidad. Eres responsable de mantener seguras tus credenciales y del contenido que subes. No compartas información médica, legal o financiera sensible que no quieras almacenada o procesada por IA.\n\n8. Cambios. Podemos actualizar estos Términos ocasionalmente; el uso continuado después de los cambios implica que los aceptas.\n\n9. Consentimiento. Al tocar "Acepto" confirmas que has leído, comprendido y aceptado estos términos y nuestra Política de Privacidad.\n\n—\n\nDesarrollado por Alchemize\nPotenciado y Diseñado por Metallicv1',
     iAgree: 'Acepto y Continuar',
     decline: 'Rechazar',
   },
 };
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function getPasswordStrength(password: string): { score: number; label: string; color: string } {
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 10) score++;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
+  if (/\d/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 1) return { score: 1, label: 'Weak', color: '#ef4444' };
+  if (score <= 2) return { score: 2, label: 'Fair', color: '#f59e0b' };
+  if (score <= 3) return { score: 3, label: 'Good', color: '#eab308' };
+  return { score: 4, label: 'Strong', color: '#22c55e' };
+}
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -86,9 +133,6 @@ export default function AuthScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
 
   useEffect(() => {
-    // Instrumentation: confirms the first interactive screen mounted. This
-    // is the stage that proves the app progressed past the splash into a real,
-    // usable UI — not merely that hideAsync() was called.
     console.info('[Startup] FIRST_SCREEN_RENDERED');
     if (Platform.OS !== 'web') {
       AppleAuthentication.isAvailableAsync().then(setAppleAuthAvailable).catch(() => setAppleAuthAvailable(false));
@@ -108,7 +152,53 @@ export default function AuthScreen() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [checkingTerms, setCheckingTerms] = useState(true);
 
+  // Entrance animations
+  const brandAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const fieldAnims = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const socialAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const errorOpacity = useRef(new Animated.Value(0)).current;
+
   const t = TRANSLATIONS[language];
+  const passwordStrength = getPasswordStrength(password);
+
+  useEffect(() => {
+    // Staggered entrance: brand → card → fields → button → social
+    const delays = [0, 150, 300, 380, 460, 540, 620, 700];
+    const animations = [
+      Animated.timing(brandAnim, { toValue: 1, duration: 600, delay: delays[0], useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+      Animated.timing(cardAnim, { toValue: 1, duration: 500, delay: delays[1], useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+      ...fieldAnims.map((anim, i) =>
+        Animated.timing(anim, { toValue: 1, duration: 400, delay: delays[2] + i * 80, useNativeDriver: true, easing: Easing.out(Easing.cubic) })
+      ),
+      Animated.timing(buttonAnim, { toValue: 1, duration: 400, delay: delays[6], useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+      Animated.timing(socialAnim, { toValue: 1, duration: 400, delay: delays[7], useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+    ];
+    animations.forEach(a => a.start());
+    return () => animations.forEach(a => a.stop());
+  }, []);
+
+  // Re-trigger field animations when switching modes
+  const prevMode = useRef(mode);
+  useEffect(() => {
+    if (prevMode.current !== mode) {
+      prevMode.current = mode;
+      fieldAnims.forEach(anim => {
+        Animated.sequence([
+          Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 1, duration: 350, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+        ]).start();
+      });
+    }
+  }, [mode]);
 
   useEffect(() => {
     (async () => {
@@ -144,20 +234,45 @@ export default function AuthScreen() {
     if (!termsAccepted) {
       setShowTermsModal(true);
       setError(t.mustAgree);
+      showError();
       return false;
     }
     return true;
+  };
+
+  const showError = () => {
+    Animated.sequence([
+      Animated.timing(errorOpacity, { toValue: 0, duration: 0, useNativeDriver: true }),
+      Animated.timing(errorOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true, easing: Easing.linear }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true, easing: Easing.linear }),
+        Animated.timing(shakeAnim, { toValue: 6, duration: 50, useNativeDriver: true, easing: Easing.linear }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true, easing: Easing.linear }),
+      ]),
+    ]).start();
   };
 
   const handleAuth = async () => {
     if (!requireTerms()) return;
     if (!email || !password) {
       setError(t.fillFields);
+      showError();
       return;
     }
-
+    if (!isValidEmail(email)) {
+      setError(t.invalidEmail);
+      showError();
+      return;
+    }
     if (mode === 'signup' && !name) {
       setError(t.enterName);
+      showError();
+      return;
+    }
+    if (password.length < 6) {
+      setError(t.weakPassword);
+      showError();
       return;
     }
 
@@ -175,6 +290,7 @@ export default function AuthScreen() {
       router.replace('/');
     } else {
       setError(result.error || 'Authentication failed');
+      showError();
     }
   };
 
@@ -200,15 +316,21 @@ export default function AuthScreen() {
         'email-address'
       );
     } else {
-      Alert.alert(
-        t.resetTitle,
-        t.resetMessage + '\n\n' + t.resetSent
-      );
+      Alert.alert(t.resetTitle, t.resetMessage + '\n\n' + t.resetSent);
     }
   };
 
   const showAppleNative = appleAuthAvailable && Platform.OS !== 'web';
   const showAppleWeb = Platform.OS === 'web';
+
+  const fieldStyle = (anim: Animated.Value) => ({
+    opacity: anim,
+    transform: [
+      {
+        translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }),
+      },
+    ],
+  });
 
   return (
     <View style={styles.container}>
@@ -220,8 +342,8 @@ export default function AuthScreen() {
         priority="high"
       />
       <LinearGradient
-        colors={['transparent', 'rgba(8,2,20,0.6)', 'rgba(8,2,20,0.95)', '#080214']}
-        locations={[0, 0.35, 0.55, 0.7]}
+        colors={['transparent', 'rgba(8,2,20,0.5)', 'rgba(8,2,20,0.92)', '#080214']}
+        locations={[0, 0.3, 0.5, 0.65]}
         style={styles.gradient}
       />
 
@@ -245,18 +367,56 @@ export default function AuthScreen() {
         >
           <View style={styles.spacer} />
 
-          <View style={styles.brandSection}>
+          {/* Brand */}
+          <Animated.View
+            style={[
+              styles.brandSection,
+              {
+                opacity: brandAnim,
+                transform: [
+                  {
+                    translateY: brandAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.brandGlow}>
+              <Sparkles color="rgba(167,139,250,0.4)" size={18} />
+            </View>
             <Text style={styles.title}>{t.transformTitle}</Text>
             <Text style={styles.subtitle}>{t.transformSubtitle}</Text>
-          </View>
+          </Animated.View>
 
-          <View style={styles.card}>
+          {/* Card */}
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                opacity: cardAnim,
+                transform: [
+                  {
+                    translateY: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }),
+                  },
+                ],
+              },
+            ]}
+          >
+            {/* Tabs */}
             <View style={styles.tabs}>
               <TouchableOpacity
                 style={[styles.tab, mode === 'login' && styles.tabActive]}
                 onPress={() => { setMode('login'); setError(''); }}
                 activeOpacity={0.8}
               >
+                {mode === 'login' && (
+                  <LinearGradient
+                    colors={['#8b5cf6', '#7c3aed']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.tabGradient}
+                  />
+                )}
                 <Text style={[styles.tabLabel, mode === 'login' && styles.tabLabelActive]}>
                   {t.login}
                 </Text>
@@ -266,185 +426,243 @@ export default function AuthScreen() {
                 onPress={() => { setMode('signup'); setError(''); }}
                 activeOpacity={0.8}
               >
+                {mode === 'signup' && (
+                  <LinearGradient
+                    colors={['#8b5cf6', '#7c3aed']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.tabGradient}
+                  />
+                )}
                 <Text style={[styles.tabLabel, mode === 'signup' && styles.tabLabelActive]}>
                   {t.signup}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {mode === 'signup' && (
-              <View style={styles.field}>
-                <User color="rgba(167,139,250,0.5)" size={16} style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder={t.fullName}
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                />
-              </View>
-            )}
-
-            <View style={styles.field}>
-              <Mail color="rgba(167,139,250,0.5)" size={16} style={styles.fieldIcon} />
-              <TextInput
-                style={styles.fieldInput}
-                placeholder={t.email}
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-              />
-            </View>
-
-            <View style={styles.field}>
-              <Lock color="rgba(167,139,250,0.5)" size={16} style={styles.fieldIcon} />
-              <TextInput
-                style={styles.fieldInput}
-                placeholder={t.password}
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoComplete="password"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-                activeOpacity={0.7}
-              >
-                {showPassword ? (
-                  <EyeOff color="rgba(167,139,250,0.4)" size={16} />
-                ) : (
-                  <Eye color="rgba(167,139,250,0.4)" size={16} />
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {mode === 'login' && (
-              <View style={styles.optionsRow}>
-                <TouchableOpacity
-                  style={styles.rememberRow}
-                  onPress={() => setRememberMe(!rememberMe)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.check, rememberMe && styles.checkOn]}>
-                    {rememberMe && <View style={styles.checkDot} />}
-                  </View>
-                  <Text style={styles.rememberLabel}>{t.rememberMe}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
-                  <Text style={styles.forgotLabel}>{t.forgotPassword}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <View style={styles.agreeRow}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (termsAccepted) {
-                    setTermsAccepted(false);
-                    AsyncStorage.removeItem(TERMS_ACCEPTED_KEY).catch(() => {});
-                  } else {
-                    setShowTermsModal(true);
-                  }
-                }}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <View style={[styles.check, termsAccepted && styles.checkOn]}>
-                  {termsAccepted && <Check color="#fff" size={11} strokeWidth={3} />}
-                </View>
-              </TouchableOpacity>
-              <Text style={styles.agreeText}>
-                {t.agreeLabel}{' '}
-                <Text
-                  style={styles.agreeLink}
-                  onPress={() => setShowTermsModal(true)}
-                  suppressHighlighting={false}
-                >
-                  {t.termsLink}
-                </Text>
-              </Text>
-            </View>
-
-            {error ? <Text style={styles.errorMsg}>{error}</Text> : null}
-
-            <TouchableOpacity
-              style={styles.submitBtn}
-              onPress={handleAuth}
-              disabled={isLoading}
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={['#8b5cf6', '#7c3aed', '#6d28d9']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.submitGradient}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <View style={styles.submitInner}>
-                    <Text style={styles.submitText}>
-                      {mode === 'login' ? t.login : t.signup}
-                    </Text>
-                    <ChevronRight color="#fff" size={18} />
-                  </View>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerLabel}>{t.or}</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            <View style={styles.socialRow}>
-              {showAppleNative && (
-                <View style={styles.socialBtn}>
-                  {appleLoading ? (
-                    <View style={styles.appleLoading}>
-                      <ActivityIndicator color="#fff" size="small" />
-                    </View>
-                  ) : (
-                    <AppleAuthentication.AppleAuthenticationButton
-                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-                      cornerRadius={10}
-                      style={styles.appleNativeBtn}
-                      onPress={async () => {
-                        setAppleLoading(true);
-                        setError('');
-                        const result = await loginWithApple();
-                        setAppleLoading(false);
-                        if (result.success) {
-                          router.replace('/');
-                        } else if (result.error && result.error !== 'Sign in was cancelled') {
-                          setError(result.error);
-                        }
-                      }}
+            <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+              {/* Name field (signup only) */}
+              {mode === 'signup' && (
+                <Animated.View style={fieldStyle(fieldAnims[0])}>
+                  <View style={styles.field}>
+                    <User color="rgba(167,139,250,0.5)" size={16} style={styles.fieldIcon} />
+                    <TextInput
+                      style={styles.fieldInput}
+                      placeholder={t.fullName}
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="words"
                     />
-                  )}
-                </View>
+                  </View>
+                </Animated.View>
               )}
 
-              {showAppleWeb && (
-                <TouchableOpacity style={styles.socialBtn} activeOpacity={0.8} disabled>
-                  <Text style={styles.appleIcon}></Text>
-                  <Text style={styles.socialLabel}>{t.signInWithApple}</Text>
-                </TouchableOpacity>
+              {/* Email field */}
+              <Animated.View style={fieldStyle(mode === 'signup' ? fieldAnims[1] : fieldAnims[0])}>
+                <View style={styles.field}>
+                  <Mail color="rgba(167,139,250,0.5)" size={16} style={styles.fieldIcon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder={t.email}
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                  />
+                </View>
+              </Animated.View>
+
+              {/* Password field */}
+              <Animated.View style={fieldStyle(mode === 'signup' ? fieldAnims[2] : fieldAnims[1])}>
+                <View style={styles.field}>
+                  <Lock color="rgba(167,139,250,0.5)" size={16} style={styles.fieldIcon} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder={t.password}
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoComplete={mode === 'login' ? 'password' : 'new-password'}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeBtn}
+                    activeOpacity={0.7}
+                  >
+                    {showPassword ? (
+                      <EyeOff color="rgba(167,139,250,0.4)" size={16} />
+                    ) : (
+                      <Eye color="rgba(167,139,250,0.4)" size={16} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Password strength (signup only) */}
+                {mode === 'signup' && password.length > 0 && (
+                  <View style={styles.strengthRow}>
+                    {[1, 2, 3, 4].map((i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.strengthBar,
+                          {
+                            backgroundColor:
+                              i <= passwordStrength.score ? passwordStrength.color : 'rgba(255,255,255,0.08)',
+                          },
+                        ]}
+                      />
+                    ))}
+                    <Text style={[styles.strengthLabel, { color: passwordStrength.color }]}>
+                      {passwordStrength.label}
+                    </Text>
+                  </View>
+                )}
+              </Animated.View>
+
+              {/* Options row (login only) */}
+              {mode === 'login' && (
+                <Animated.View style={fieldStyle(fieldAnims[2])}>
+                  <View style={styles.optionsRow}>
+                    <TouchableOpacity
+                      style={styles.rememberRow}
+                      onPress={() => setRememberMe(!rememberMe)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.check, rememberMe && styles.checkOn]}>
+                        {rememberMe && <View style={styles.checkDot} />}
+                      </View>
+                      <Text style={styles.rememberLabel}>{t.rememberMe}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
+                      <Text style={styles.forgotLabel}>{t.forgotPassword}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
               )}
-            </View>
-          </View>
+
+              {/* Terms checkbox */}
+              <Animated.View style={fieldStyle(mode === 'signup' ? fieldAnims[3] : fieldAnims[3])}>
+                <View style={styles.agreeRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (termsAccepted) {
+                        setTermsAccepted(false);
+                        AsyncStorage.removeItem(TERMS_ACCEPTED_KEY).catch(() => {});
+                      } else {
+                        setShowTermsModal(true);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <View style={[styles.check, termsAccepted && styles.checkOn]}>
+                      {termsAccepted && <Check color="#fff" size={11} strokeWidth={3} />}
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={styles.agreeText}>
+                    {t.agreeLabel}{' '}
+                    <Text
+                      style={styles.agreeLink}
+                      onPress={() => setShowTermsModal(true)}
+                      suppressHighlighting={false}
+                    >
+                      {t.termsLink}
+                    </Text>
+                  </Text>
+                </View>
+              </Animated.View>
+
+              {/* Error message */}
+              <Animated.Text style={[styles.errorMsg, { opacity: errorOpacity }]}>
+                {error}
+              </Animated.Text>
+
+              {/* Submit button */}
+              <Animated.View style={fieldStyle(buttonAnim)}>
+                <TouchableOpacity
+                  style={styles.submitBtn}
+                  onPress={handleAuth}
+                  disabled={isLoading}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={['#8b5cf6', '#7c3aed', '#6d28d9']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.submitGradient}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <View style={styles.submitInner}>
+                        <Text style={styles.submitText}>
+                          {mode === 'login' ? t.login : t.signup}
+                        </Text>
+                        <ChevronRight color="#fff" size={18} />
+                      </View>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </Animated.View>
+            </Animated.View>
+
+            {/* Divider */}
+            <Animated.View style={fieldStyle(socialAnim)}>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerLabel}>{t.or}</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              {/* Social buttons */}
+              <View style={styles.socialRow}>
+                {showAppleNative && (
+                  <View style={styles.socialBtn}>
+                    {appleLoading ? (
+                      <View style={styles.appleLoading}>
+                        <ActivityIndicator color="#fff" size="small" />
+                      </View>
+                    ) : (
+                      <AppleAuthentication.AppleAuthenticationButton
+                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                        cornerRadius={12}
+                        style={styles.appleNativeBtn}
+                        onPress={async () => {
+                          setAppleLoading(true);
+                          setError('');
+                          const result = await loginWithApple();
+                          setAppleLoading(false);
+                          if (result.success) {
+                            router.replace('/');
+                          } else if (result.error && result.error !== 'Sign in was cancelled') {
+                            setError(result.error);
+                            showError();
+                          }
+                        }}
+                      />
+                    )}
+                  </View>
+                )}
+
+                {showAppleWeb && (
+                  <TouchableOpacity style={styles.socialBtn} activeOpacity={0.8} disabled>
+                    <Text style={styles.appleIcon}>🍎</Text>
+                    <Text style={styles.socialLabel}>{t.signInWithApple}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Animated.View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Terms modal */}
       <Modal
         visible={showTermsModal && !checkingTerms}
         transparent
@@ -551,17 +769,28 @@ const styles = StyleSheet.create({
   },
   brandSection: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
     paddingHorizontal: 24,
   },
+  brandGlow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(139,92,246,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139,92,246,0.2)',
+  },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '800' as const,
     color: '#fff',
-    letterSpacing: 2,
+    letterSpacing: 2.5,
     textShadowColor: 'rgba(139,92,246,0.6)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 16,
+    textShadowRadius: 20,
     marginBottom: 4,
   },
   subtitle: {
@@ -572,27 +801,39 @@ const styles = StyleSheet.create({
   },
   card: {
     marginHorizontal: 20,
-    backgroundColor: 'rgba(15,8,30,0.85)',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: 'rgba(15,8,30,0.88)',
+    borderRadius: 24,
+    padding: 22,
     borderWidth: 1,
     borderColor: 'rgba(139,92,246,0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    elevation: 12,
   },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(139,92,246,0.08)',
-    borderRadius: 12,
-    padding: 3,
-    marginBottom: 16,
+    backgroundColor: 'rgba(139,92,246,0.06)',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 18,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 11,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 11,
+    overflow: 'hidden',
   },
-  tabActive: {
-    backgroundColor: 'rgba(139,92,246,0.9)',
+  tabActive: {},
+  tabGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 11,
   },
   tabLabel: {
     fontSize: 13,
@@ -607,11 +848,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(139,92,246,0.06)',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(139,92,246,0.12)',
     marginBottom: 10,
-    height: 46,
+    height: 50,
   },
   fieldIcon: {
     marginLeft: 14,
@@ -620,7 +861,7 @@ const styles = StyleSheet.create({
   fieldInput: {
     flex: 1,
     paddingHorizontal: 10,
-    fontSize: 14,
+    fontSize: 15,
     color: '#fff',
     height: '100%',
   },
@@ -628,6 +869,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: '100%',
     justifyContent: 'center',
+  },
+  strengthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 10,
+    marginTop: -2,
+    paddingLeft: 2,
+  },
+  strengthBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+  },
+  strengthLabel: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    marginLeft: 6,
   },
   optionsRow: {
     flexDirection: 'row',
@@ -677,13 +936,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   submitBtn: {
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
     marginTop: 6,
     marginBottom: 16,
   },
   submitGradient: {
-    paddingVertical: 13,
+    paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -724,8 +983,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12,
-    height: 44,
+    borderRadius: 14,
+    height: 48,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     gap: 8,
@@ -736,18 +995,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
   },
   appleLoading: {
-    height: 44,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
   },
   appleNativeBtn: {
     width: '100%',
-    height: 44,
+    height: 48,
   },
   appleIcon: {
     fontSize: 16,
-    color: '#fff',
-    fontWeight: '600' as const,
   },
   agreeRow: {
     flexDirection: 'row',
@@ -769,7 +1026,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(4,1,12,0.85)',
+    backgroundColor: 'rgba(4,1,12,0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
@@ -779,7 +1036,7 @@ const styles = StyleSheet.create({
     maxWidth: 440,
     maxHeight: '85%',
     backgroundColor: '#120824',
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(139,92,246,0.25)',
     overflow: 'hidden',
@@ -838,8 +1095,8 @@ const styles = StyleSheet.create({
   },
   declineBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: 12,
+    height: 48,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -853,11 +1110,11 @@ const styles = StyleSheet.create({
   },
   agreeBtn: {
     flex: 1.4,
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: 'hidden',
   },
   agreeBtnGradient: {
-    height: 46,
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
