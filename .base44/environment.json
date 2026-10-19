@@ -1,0 +1,12 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "EXPO_PUBLIC_RORK_API_BASE_URL",
+      "description": "Public URL of the Alchemize backend tRPC API (e.g. https://your-backend-host). Optional for the web preview to render; the app falls back to a placeholder when unset.",
+      "requiredAtBoot": false
+    }
+  ]
+}
