@@ -30,10 +30,12 @@
 - TypeScript: `bunx tsc --noEmit` (run inside the web container) — passes with zero errors at HEAD.
 - Audit docs: `docs/APP_AUDIT_REPORT.md`, `docs/FEATURE_VERIFICATION_MATRIX.md`, `docs/RELEASE_READINESS.md`, `docs/CHANGELOG.md`.
 
-## Auth screen (Phase 2 redesign)
-- `expo/app/auth.tsx` was redesigned with staggered entrance animations, password strength indicator, email validation, and error shake animation.
-- All existing functionality preserved: login, signup, Apple Sign In (native), terms modal, language toggle (EN/ES), password reset, remember me, password visibility toggle.
-- Background image (crystal ball) and brand identity unchanged.
+## Auth screens (signup/login/splash rebuild)
+- `expo/app/auth.tsx` = **login** screen; `expo/app/signup.tsx` = **signup** screen (separate routes, slide transitions).
+- Shared reusable components live in `expo/components/auth/`: `AuthShell` (crystal-ball background + overlays), `AuthField` (frosted input), `AuthButton` (gradient + haptic), `TermsModal`, `useAuthMotion` (Reduce Motion), `shared.ts` (translations EN/ES + validators + constants).
+- `expo/components/BrandedSplash.tsx` has two modes: `mode="loading"` (persistent boot view during auth init) and `mode="cinematic"` (one-time skippable brand intro for unauthenticated users, played by `AuthGate` once per cold launch via an in-session `introDone` flag). Returning authenticated users skip it entirely.
+- All existing auth backend logic (`contexts/auth-context.tsx`) is unchanged — login, signup, Apple Sign In, password reset, bcrypt, SecureStore sessions. No user accounts/data affected.
+- Original crystal-ball background image and brand identity preserved. Native splash (`app.json`) uses `splash-icon.png` + `resizeMode: contain` on `#0c0520` (no white flash); the crystal ball appears in the React intro.
 
 ## iPad support
 - `app.json` has `supportsTablet: false`. If iPad testing is needed, change to `true` and test layout on iPad before submission.

@@ -2,6 +2,36 @@
 
 All notable changes to Alchemize are documented here.
 
+## [Unreleased] — Signup, Login & Splash Screen Rebuild (2026-10-19)
+
+### Rebuilt
+- **Cinematic animated intro** (`expo/components/BrandedSplash.tsx`): completely rebuilt with the original crystal-ball background, an expanding atmospheric violet glow, a breathing splash icon, the Alchemize wordmark, and a fading tagline. Plays once per cold launch for unauthenticated users and transitions smoothly into authentication. Tap-to-skip; returning users get an abbreviated sequence so startup is never delayed. Respects iOS Reduce Motion (opacity-only fades, no transforms). Also serves as the persistent loading view while auth/subscription boots.
+- **Login screen** (`expo/app/auth.tsx`): rebuilt from the ground up with a full-screen crystal-ball background, frosted-glass card (`expo-blur`), staggered entrance, welcome headline, email + password fields with visibility toggle, remember-me, forgot-password recovery, terms & privacy link, premium gradient Sign In button with press-scale + haptic, Apple Sign In (native + web fallback), and a footer link to signup. Real-time validation with shake + red error states.
+- **Signup screen** (`expo/app/signup.tsx`): new dedicated route with full name, email, password + live 4-bar strength meter, confirm-password with real-time match validation, terms checkbox, premium Create Account button, Apple Sign In (signup variant), and a back button + footer link to login.
+
+### Added
+- **Reusable auth components** (`expo/components/auth/`): `AuthShell` (shared crystal-ball background + overlays + safe area), `AuthField` (frosted input with icon, visibility toggle, error state), `AuthButton` (premium gradient button with press-scale + haptic), `TermsModal` (shared frosted terms & privacy modal), `useAuthMotion` (Reduce Motion hook), and `shared.ts` (translations EN/ES, validators, constants).
+- **Seamless transitions**: the `AuthGate` now plays the cinematic intro once per session for unauthenticated users, then renders the auth route. Returning authenticated users proceed directly to the app with no intro. The signup route is registered in the Stack with slide transitions. No flickering, duplicate splash, or navigation loops.
+- Native splash config (`app.json`) retained: `splash-icon.png` with `resizeMode: contain` on the `#0c0520` brand background — no white flash, no stretched artwork — with the crystal ball appearing immediately in the React intro for visual continuity.
+
+### Preserved
+- All existing authentication backend logic (`contexts/auth-context.tsx`) unchanged: login, signup, Apple Sign In, password reset, bcrypt hashing, SecureStore session persistence, remember-me. No user accounts, subscriptions, or data affected.
+
+### Verified (Web Preview)
+- TypeScript: 0 errors; ESLint: 0 errors/warnings
+- Cinematic intro renders and is skippable; transitions to login
+- Login screen renders with all fields, terms modal opens, validation errors show (red message + field borders), fields accept input
+- Signup screen renders with strength meter, confirm-password match validation, terms checkbox, Apple Sign In
+- Login ↔ signup navigation (push/back) works
+- No console errors; no horizontal overflow at tablet width
+
+### Requires Physical iPhone Verification
+- Native splash scaling across iPhone screen sizes (SE → Pro Max)
+- Apple Sign In with real Apple credentials
+- Reduce Motion accessibility behavior on iOS
+- Keyboard handling and safe-area insets on device
+- 60 FPS animation performance on cold launch
+
 ## [1.4.7] — 2026-10-19
 
 ### Added
