@@ -9,6 +9,8 @@
 - `docker-compose.base44.yml` runs the Expo **web** dev server from the cloned source via `bunx expo start --web --port 3000 --host lan`. Deps install into a named volume (`expo_node_modules`) on container start.
 - Expo's `--host` flag only accepts `lan|tunnel|localhost` — **not** `0.0.0.0` (it throws an AssertionError). `lan` binds the interfaces the preview proxy needs.
 - The user-supplied backend URL (`EXPO_PUBLIC_RORK_API_BASE_URL`) is optional for the preview and is delivered via `/run/base44/app.env` (env_file), never hardcoded in `environment:`.
+- `expo/app.config.js` adds only the preview origin to Expo's CORS allowlist when `BASE44_PREVIEW_MODE === "1"`; Compose must pass `BASE44_PUBLIC_HOST_SUFFIX` as well. With the flag unset, the original config is returned unchanged.
+- Run temporary exports with `docker compose -f docker-compose.base44.yml exec -T web ...` rather than leaving `compose run` containers alive: Expo exports can finish writing but keep watchers running, and one-off containers inherit irrelevant web healthchecks.
 - These Base44/Docker changes are intentionally separate from application code.
 
 ## Critical: react-native-purchases / RevenueCat
