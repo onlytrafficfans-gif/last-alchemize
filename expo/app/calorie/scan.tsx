@@ -112,6 +112,57 @@ Please re-analyze the image incorporating these corrections. Apply the same rigo
 3. Account for cooking methods, hidden calories, and condiments
 4. Be specific with food names and preparation methods`;
 
+// --- Barcode product lookup (Open Food Facts, free public database) ---
+// https://world.openfoodfacts.org/data — no API key required.
+interface BarcodeLookupResult {
+  found: boolean;
+  name: string;
+  calories: string;
+  protein: string;
+  carbs: string;
+  fat: string;
+  fiber: string;
+  servingDescription: string;
+}
+
+async function lookupBarcodeProduct(barcode: string): Promise<BarcodeLookupResult> {
+  const empty = { found: false, name: '', calories: '', protein: '', carbs: '', fat: '', fiber: '', servingDescription: '' };
+  try {
+    const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_en,serving_size,serving_quantity,nutriments`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Alchemize/1.4.7 (iOS; contact@alchemize.app)' },
+    });
+    if (!res.ok) return empty;
+    const data = await res.json();
+    if (data.status !== 1 || !data.product) return empty;
+
+    const p = data.product;
+    const n = p.nutriments || {};
+    const name = p.product_name || p.product_name_en || '';
+    if (!name) return empty;
+
+    // Prefer per-serving values when the product declares a serving; fall back to per-100g.
+    const num = (val: unknown): string => {
+      const v = typeof val === 'number' ? val : typeof val === 'string' ? parseFloat(val) : NaN;
+      return Number.isFinite(v) ? String(Math.round(v * 10) / 10) : '';
+    };
+
+    const kcal = num(n['energy-kcal_serving'] ?? n['energy-kcal_100g'] ?? n['energy-kcal']);
+    const protein = num(n['proteins_serving'] ?? n['proteins_100g'] ?? n['proteins']);
+    const carbs = num(n['carbohydrates_serving'] ?? n['carbohydrates_100g'] ?? n['carbohydrates']);
+    const fat = num(n['fat_serving'] ?? n['fat_100g'] ?? n['fat']);
+    const fiber = num(n['fiber_serving'] ?? n['fiber_100g'] ?? n['fiber']);
+    const servingDescription = p.serving_size
+      ? `1 serving (${p.serving_size})`
+      : 'per 100g';
+
+    return { found: true, name, calories: kcal, protein, carbs, fat, fiber, servingDescription };
+  } catch (error) {
+    console.error('[FoodScanner] Barcode lookup error:', error);
+    return empty;
+  }
+}
+
 export default function FoodScannerScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -138,6 +189,8 @@ export default function FoodScannerScreen() {
   const [barcodeFiber, setBarcodeFiber] = useState('');
   const [barcodeMealType, setBarcodeMealType] = useState<MealType>(getAutoMealType());
   const [showBarcodeMealPicker, setShowBarcodeMealPicker] = useState(false);
+  const [barcodeLookingUp, setBarcodeLookingUp] = useState(false);
+  const [barcodeFound, setBarcodeFound] = useState<boolean | null>(null);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -406,6 +459,34 @@ export default function FoodScannerScreen() {
   const handleBarcodeScanned = useCallback(({ data }: { data: string }) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setBarcodeData(data);
+    setBarcodeFound(null);
+    setBarcodeLookingUp(true);
+    setBarcodeFoodName('');
+    setBarcodeCalories('');
+    setBarcodeProtein('');
+    setBarcodeCarbs('');
+    setBarcodeFat('');
+    setBarcodeFiber('');
+
+    // Look up the scanned barcode in the Open Food Facts public database.
+    // On success the nutrition fields are pre-filled (still editable); on
+    // failure the user gets a graceful manual-entry fallback.
+    lookupBarcodeProduct(data)
+      .then((result) => {
+        if (result.found) {
+          setBarcodeFoodName(result.name);
+          setBarcodeCalories(result.calories);
+          setBarcodeProtein(result.protein);
+          setBarcodeCarbs(result.carbs);
+          setBarcodeFat(result.fat);
+          setBarcodeFiber(result.fiber);
+          setBarcodeFound(true);
+        } else {
+          setBarcodeFound(false);
+        }
+      })
+      .catch(() => setBarcodeFound(false))
+      .finally(() => setBarcodeLookingUp(false));
   }, []);
 
   const barcodeSaveMutation = useMutation({
@@ -537,7 +618,14 @@ export default function FoodScannerScreen() {
         />
 
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity onPress={() => setBarcodeData(null)} style={styles.headerBtn}>
+          <TouchableOpacity
+            onPress={() => {
+              setBarcodeData(null);
+              setBarcodeFound(null);
+              setBarcodeLookingUp(false);
+            }}
+            style={styles.headerBtn}
+          >
             <RotateCcw size={22} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
@@ -563,7 +651,23 @@ export default function FoodScannerScreen() {
           <View style={styles.barcodeInfoCard}>
             <Text style={styles.barcodeLabel}>Scanned Barcode</Text>
             <Text style={styles.barcodeValue}>{barcodeData}</Text>
-            <Text style={styles.barcodeHint}>Product not found in database. Please enter the details below.</Text>
+            {barcodeLookingUp ? (
+              <View style={styles.barcodeLookupRow}>
+                <ActivityIndicator size="small" color="#6366f1" />
+                <Text style={styles.barcodeHint}>Looking up product in food database…</Text>
+              </View>
+            ) : barcodeFound ? (
+              <View style={styles.barcodeLookupRow}>
+                <Check size={16} color="#22c55e" />
+                <Text style={[styles.barcodeHint, { color: '#22c55e' }]}>
+                  Product found — nutrition auto-filled. Edit if needed.
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.barcodeHint}>
+                We could not find this product in the food database. Please enter the details below.
+              </Text>
+            )}
           </View>
 
           <View style={styles.barcodeForm}>
@@ -1279,6 +1383,12 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 4,
     lineHeight: 18,
+  },
+  barcodeLookupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
   },
   barcodeForm: {
     gap: 12,

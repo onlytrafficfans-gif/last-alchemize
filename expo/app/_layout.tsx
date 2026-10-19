@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useRootNavigationState, useSegments } from "expo-router";
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, Platform, View, Image } from 'react-native';
+import { StyleSheet, Text, Platform, View } from 'react-native';
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -15,6 +15,7 @@ import GestureOnboarding from "@/components/GestureOnboarding";
 import { applyWebPolish } from "@/lib/web-polish";
 import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
 import { isGatedFeature } from "@/constants/features";
+import BrandedSplash from "@/components/BrandedSplash";
 
 console.info('[Startup] JS_STARTED');
 
@@ -83,15 +84,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, isLoading, segments, navState?.key, router]);
 
   if (isLoading) {
-    return (
-      <View style={layoutStyles.splash}>
-        <Image
-          source={require('../assets/images/splash-icon.png')}
-          style={layoutStyles.splashImage}
-          resizeMode="contain"
-        />
-      </View>
-    );
+    return <BrandedSplash />;
   }
 
   return <>{children}</>;
@@ -115,7 +108,7 @@ function PaywallGate({ children }: { children: React.ReactNode }) {
   }, [isGatedRoute, isPro, subLoading, navState?.key, router]);
 
   if (isGatedRoute && (subLoading || !isPro)) {
-    return <View style={layoutStyles.splash} />;
+    return <BrandedSplash />;
   }
 
   return <>{children}</>;
