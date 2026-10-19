@@ -64,6 +64,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     });
     void Promise.race([loadAuthState(), timeout]).finally(() => {
       setIsLoading(false);
+      console.info('[Startup] AUTH_INITIALIZED');
       console.info('[Startup] AUTH_FINISHED');
     });
   }, []);

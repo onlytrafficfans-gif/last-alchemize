@@ -86,6 +86,10 @@ export default function AuthScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
 
   useEffect(() => {
+    // Instrumentation: confirms the first interactive screen mounted. This
+    // is the stage that proves the app progressed past the splash into a real,
+    // usable UI — not merely that hideAsync() was called.
+    console.info('[Startup] FIRST_SCREEN_RENDERED');
     if (Platform.OS !== 'web') {
       AppleAuthentication.isAvailableAsync().then(setAppleAuthAvailable).catch(() => setAppleAuthAvailable(false));
     }
