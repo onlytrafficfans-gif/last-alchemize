@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useRootNavigationState, useSegments } from "expo-router";
-import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, Platform, View, Image } from 'react-native';
+import React, { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, Platform, View } from 'react-native';
 import { TouchableOpacity } from '@/components/HapticTouchable';
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -15,6 +15,7 @@ import GestureOnboarding from "@/components/GestureOnboarding";
 import { applyWebPolish } from "@/lib/web-polish";
 import { useFonts, SpaceMono_400Regular } from "@expo-google-fonts/space-mono";
 import { isGatedFeature } from "@/constants/features";
+import BrandedSplash from "@/components/BrandedSplash";
 
 console.info('[Startup] JS_STARTED');
 
@@ -63,6 +64,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const navState = useRootNavigationState();
   const navReadyLogged = useRef(false);
+  // Session-level flag: the cinematic intro plays once per cold launch for
+  // unauthenticated users, then transitions into the auth route. Returning
+  // authenticated users skip it entirely.
+  const [introDone, setIntroDone] = useState(false);
 
   useEffect(() => {
     if (navState?.key && !navReadyLogged.current) {
@@ -74,7 +79,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     if (!navState?.key) return;
-    const inAuth = segments[0] === 'auth';
+    const inAuth = segments[0] === 'auth' || segments[0] === 'signup';
     if (!isAuthenticated && !inAuth) {
       router.replace('/auth');
     } else if (isAuthenticated && inAuth) {
@@ -83,15 +88,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, isLoading, segments, navState?.key, router]);
 
   if (isLoading) {
-    return (
-      <View style={layoutStyles.splash}>
-        <Image
-          source={require('../assets/images/splash-icon.png')}
-          style={layoutStyles.splashImage}
-          resizeMode="contain"
-        />
-      </View>
-    );
+    return <BrandedSplash mode="loading" />;
+  }
+
+  // One-time cinematic brand intro before the auth screens appear.
+  if (!isAuthenticated && !introDone) {
+    return <BrandedSplash mode="cinematic" onComplete={() => setIntroDone(true)} />;
   }
 
   return <>{children}</>;
@@ -115,7 +117,7 @@ function PaywallGate({ children }: { children: React.ReactNode }) {
   }, [isGatedRoute, isPro, subLoading, navState?.key, router]);
 
   if (isGatedRoute && (subLoading || !isPro)) {
-    return <View style={layoutStyles.splash} />;
+    return <BrandedSplash />;
   }
 
   return <>{children}</>;
@@ -139,6 +141,7 @@ function RootLayoutNav() {
       }}
     >
       <Stack.Screen name="auth" options={{ title: "Welcome", headerShown: false }} />
+      <Stack.Screen name="signup" options={{ title: "Create Account", headerShown: false }} />
       <Stack.Screen name="paywall" options={{ title: "Alchemize Pro", headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="index" options={{ title: "Alchemize", headerShown: false }} />
       <Stack.Screen name="manifestation-board/index" options={{ title: "Portal Board", headerShown: true }} />
